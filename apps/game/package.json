@@ -1,0 +1,19 @@
+{
+  "name": "@fuse/game",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Fuse — the playable client. Canvas for the board, DOM for everything around it.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview --port 4173"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.0",
+    "@capacitor/cli": "^8.5.0",
+    "@capacitor/core": "^8.5.0",
+    "@fuse/gen": "*",
+    "@fuse/sim": "*"
+  }
+}

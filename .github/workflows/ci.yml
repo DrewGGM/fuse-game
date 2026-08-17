@@ -1,0 +1,81 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Unit and integration tests
+        run: npm run test -- --coverage
+
+      # The gate that everything else rests on: the simulation must produce
+      # identical results in a browser and in Node, or the leaderboard is fiction.
+      # It runs on every push, not just on main, because a divergence found late
+      # invalidates every score already submitted.
+      - name: Install browser
+        run: npx playwright install --with-deps chromium
+
+      - name: Cross-engine parity
+        run: npx playwright test --project=parity
+
+      - name: End-to-end
+        run: npx playwright test --project=app
+
+      - name: Upload failure traces
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
+
+  android:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - run: npm ci
+      - run: npm run build --workspace=@fuse/game
+      - run: npx cap sync android
+        working-directory: apps/game
+
+      # Proves the store artefact still builds. Signing happens in the release
+      # workflow, not here — CI never touches the upload key.
+      - name: Build AAB
+        run: ./gradlew bundleDebug --no-daemon
+        working-directory: apps/game/android

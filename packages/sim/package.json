@@ -1,0 +1,14 @@
+{
+  "name": "@fuse/sim",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Deterministic chain-reaction simulation. Shared verbatim by the game client and the scoring server.",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "dependencies": {},
+  "sideEffects": false
+}

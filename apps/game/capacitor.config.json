@@ -1,0 +1,12 @@
+{
+  "appId": "gg.fuse.daily",
+  "appName": "Fuse",
+  "webDir": "dist",
+  "android": {
+    "backgroundColor": "#070B0D",
+    "allowMixedContent": false
+  },
+  "server": {
+    "androidScheme": "https"
+  }
+}

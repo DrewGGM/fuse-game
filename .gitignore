@@ -1,0 +1,32 @@
+# dependencies
+node_modules/
+
+# build output
+dist/
+coverage/
+*.tsbuildinfo
+
+# tests
+test-results/
+playwright-report/
+.playwright-mcp/
+blob-report/
+
+# android build artefacts (the project itself IS committed)
+apps/game/android/.gradle/
+apps/game/android/build/
+apps/game/android/app/build/
+apps/game/android/local.properties
+apps/game/android/app/src/main/assets/public/
+apps/game/android/app/src/main/assets/capacitor.config.json
+apps/game/android/capacitor-cordova-android-plugins/
+*.keystore
+*.jks
+
+# local scratch
+*.log
+.DS_Store
+.env
+.env.local
+fuse-*.png
+midrun.txt

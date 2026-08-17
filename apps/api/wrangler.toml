@@ -1,0 +1,18 @@
+name = "fuse-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Observability is on from day one: the alarm that matters is the rate of
+# SCORE_MISMATCH, and you cannot alert on logs you never collected.
+[observability]
+enabled = true
+
+[[d1_databases]]
+binding = "DB"
+database_name = "fuse-db"
+# Filled in by `wrangler d1 create fuse-db`.
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+# TOKEN_SECRET is a secret, never a var:
+#   npx wrangler secret put TOKEN_SECRET

@@ -1,0 +1,22 @@
+{
+  "name": "@fuse/api",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Scoring and leaderboard Worker. Re-runs every submission with the same simulation the client used.",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "db:migrate:local": "wrangler d1 migrations apply fuse-db --local",
+    "db:migrate": "wrangler d1 migrations apply fuse-db --remote"
+  },
+  "dependencies": {
+    "@fuse/gen": "*",
+    "@fuse/sim": "*",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20250109.0",
+    "wrangler": "^3.99.0"
+  }
+}
