@@ -4,7 +4,17 @@
  * The board is a dark workbench and the spark is the only warm thing on it.
  * Everything in the UI stays cool and quiet so that the moment a node lights,
  * it is the brightest thing on screen. That contrast is the whole design.
+ *
+ * Type: Chakra Petch (SIL OFL 1.1), self-hosted through @fontsource so the app
+ * works offline and never asks a CDN for anything. Its cut corners and squared
+ * terminals read as circuitry, which is the world the game lives in; it carries
+ * headings, numbers and controls, while running prose stays on the system face
+ * for legibility at small sizes.
  */
+@import '@fontsource/chakra-petch/latin-400.css';
+@import '@fontsource/chakra-petch/latin-500.css';
+@import '@fontsource/chakra-petch/latin-600.css';
+@import '@fontsource/chakra-petch/latin-700.css';
 
 :root {
   /* Ground: near-black with a green-blue bias, like an unlit circuit board. */
@@ -36,7 +46,8 @@
   --tap: 48px;
 
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: ui-monospace, 'Cascadia Mono', 'SF Mono', Consolas, monospace;
+  --font-display: 'Chakra Petch', system-ui, sans-serif;
+  --font-mono: 'Chakra Petch', ui-monospace, 'SF Mono', Consolas, monospace;
 
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -45,6 +56,15 @@
 * {
   box-sizing: border-box;
   -webkit-tap-highlight-color: transparent;
+}
+
+/*
+ * Any component with an explicit `display` silently beats the browser's default
+ * `[hidden] { display: none }`, so an element the code believes is hidden stays
+ * on screen. One rule here instead of remembering it per component.
+ */
+[hidden] {
+  display: none !important;
 }
 
 html,
@@ -102,14 +122,17 @@ h1,
 h2,
 h3 {
   margin: 0;
-  font-weight: 650;
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 /* ---------------------------------------------------------------- buttons */
 
 .btn {
   appearance: none;
+  font-family: var(--font-display);
+  letter-spacing: 0.02em;
   border: 1px solid transparent;
   border-radius: var(--radius-sm);
   font: inherit;
@@ -279,7 +302,7 @@ h3 {
 
 .daily-meta {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   gap: 1px;
   background: var(--ink-500);
   border-radius: var(--radius-sm);
@@ -294,14 +317,15 @@ h3 {
   gap: 2px;
 }
 .meta-v {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
+  font-weight: 600;
   font-size: 1.28rem;
   font-variant-numeric: tabular-nums;
   color: var(--text);
   line-height: 1.1;
 }
 .meta-l {
-  font-size: 0.7rem;
+  font-size: 0.62rem;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -352,7 +376,8 @@ h3 {
   color: var(--text-faint);
 }
 .score-live {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
+  font-weight: 600;
   font-size: 1.5rem;
   font-variant-numeric: tabular-nums;
   color: var(--spark);
@@ -391,11 +416,25 @@ h3 {
   pointer-events: none;
 }
 
+.tray-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  margin: 10px 0;
+}
+.tray-note {
+  margin: 0;
+  font-size: 0.74rem;
+  color: var(--text-faint);
+  text-align: center;
+  max-width: 34ch;
+  line-height: 1.35;
+}
 .tray {
   display: flex;
   gap: 8px;
   justify-content: center;
-  margin: 12px 0;
   min-height: 62px;
 }
 .slot {
@@ -471,7 +510,8 @@ h3 {
   color: var(--text-faint);
 }
 .result-score {
-  font-family: var(--font-mono);
+  font-family: var(--font-display);
+  font-weight: 700;
   font-size: 3.6rem;
   font-variant-numeric: tabular-nums;
   line-height: 1;
@@ -491,17 +531,36 @@ h3 {
 }
 
 .result-bar {
+  position: relative;
   width: min(320px, 88%);
-  height: 7px;
+  height: 9px;
   border-radius: 99px;
   background: var(--ink-600);
-  overflow: hidden;
   margin-top: 6px;
+}
+/* The target sits on the track as a notch, so the gap is a distance you can see. */
+.result-bar-mark {
+  position: absolute;
+  top: -4px;
+  width: 2px;
+  height: 17px;
+  border-radius: 2px;
+  background: var(--cool);
+  transform: translateX(-1px);
+}
+.result-bar-mark::after {
+  content: '';
+  position: absolute;
+  inset: -3px -4px;
+  border-radius: 4px;
+  background: rgba(63, 180, 201, 0.18);
 }
 .result-bar-fill {
   height: 100%;
   width: 0;
   border-radius: 99px;
+  position: relative;
+  z-index: 1;
   background: linear-gradient(90deg, var(--spark-deep), var(--spark));
   transition: width 700ms cubic-bezier(0.2, 0.9, 0.3, 1);
 }
@@ -512,6 +571,16 @@ h3 {
   font-size: 0.74rem;
   color: var(--text-faint);
   font-variant-numeric: tabular-nums;
+}
+
+.result-gap {
+  margin: 2px 0 0;
+  font-size: 0.86rem;
+  color: var(--text-dim);
+}
+.result-gap[data-tone='good'] {
+  color: var(--good);
+  font-weight: 600;
 }
 
 .result-share {
@@ -844,6 +913,70 @@ h3 {
   font-size: 0.74rem;
   color: var(--text-faint);
   text-align: center;
+}
+
+/* --------------------------------------------------------------- tutorial */
+
+.screen-tutorial {
+  gap: 12px;
+}
+.tut-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.tut-step {
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  letter-spacing: 0.16em;
+  color: var(--text-faint);
+}
+.tut-board-wrap {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  place-items: center;
+}
+#tut-canvas {
+  display: block;
+  touch-action: none;
+  border-radius: var(--radius);
+}
+.tut-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--ink-700);
+  border: 1px solid var(--ink-500);
+  border-radius: var(--radius);
+  padding: 18px;
+}
+.tut-text {
+  margin: 0;
+  font-size: 1.02rem;
+  line-height: 1.5;
+  color: var(--text);
+  min-height: 3.1em;
+}
+.tut-piece {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  align-self: flex-start;
+  background: var(--ink-900);
+  border: 1px solid var(--spark-deep);
+  border-radius: var(--radius-sm);
+  padding: 8px 14px 8px 8px;
+}
+.tut-piece canvas {
+  width: 38px;
+  height: 38px;
+}
+.tut-piece span {
+  font-family: var(--font-display);
+  font-size: 0.9rem;
+  color: var(--text-dim);
+  letter-spacing: 0.04em;
 }
 
 /* ------------------------------------------------------------------ toast */

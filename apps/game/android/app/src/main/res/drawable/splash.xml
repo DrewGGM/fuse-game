@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Launch background.
+
+  Replaces sixteen density and orientation variants of a full-bleed PNG that
+  together weighed 2.3 MB — a third of the install size, for a screen that is on
+  view for a fraction of a second. A flat field with the mark centred renders
+  identically and costs a few hundred bytes.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:drawable="@color/launchBackground" />
+    <item
+        android:drawable="@mipmap/ic_launcher_foreground"
+        android:gravity="center"
+        android:width="180dp"
+        android:height="180dp" />
+</layer-list>

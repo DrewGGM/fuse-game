@@ -37,6 +37,8 @@ export interface SaveData {
   /** Last date a reward was granted, so doubling can't be farmed. */
   lastRewardDate: string | null;
   rewardsUsedToday: number;
+  /** True once the first-run tutorial has been seen or skipped. */
+  tutorialDone: boolean;
 }
 
 const DEFAULTS: SaveData = {
@@ -48,6 +50,7 @@ const DEFAULTS: SaveData = {
   sparks: 0,
   lastRewardDate: null,
   rewardsUsedToday: 0,
+  tutorialDone: false,
 };
 
 function clone(data: SaveData): SaveData {

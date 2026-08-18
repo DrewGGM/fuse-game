@@ -1,8 +1,11 @@
 # Fuse
 
 A daily chain-reaction puzzle for Android. Everyone in the world gets the same
-board and the same five pieces each day. You place them, light one spark, and
-watch what happens.
+board and the same five pieces each day. Place as many or as few as you like,
+light one spark, and watch what happens.
+
+There is no correct solution to find. You chase a score, and the game tells you
+what the best known score is so the number means something.
 
 ```
         ▽
@@ -26,8 +29,8 @@ live accounts before release.
 One decision drives the whole repository: **the score is decided by a simulation
 that runs identically on the player's phone and on the server.**
 
-A run is nothing but five placements and a date. The server re-executes it with
-the very same module the client used and compares the result. Either the number
+A run is nothing but a handful of placements and a date. The server re-executes
+it with the very same module the client used and compares the result. Either the number
 reproduces exactly or the submission is rejected. There are no heuristics, no
 "suspicious score" thresholds, and no way to fake a leaderboard entry.
 
@@ -115,6 +118,23 @@ stochastic and its variance is large enough that a different budget can find a
 par 40% apart on the same board, so "good" only means anything relative to a
 fixed effort. **Changing that constant invalidates every curated seed.**
 
+The target shown to players lives in `packages/gen/src/pars.json`, rebuilt with
+`npm run pars`. It is the best score the reference solver found — not a proven
+maximum — and the game says as much when a player beats it.
+
+To check that every shipped board really is playable:
+
+```bash
+npm run verify:seeds        # all 800: a scoring solution exists and replays
+```
+
+### A note on the rules
+
+A run may use **one to five** pieces. Requiring all five implied there was an
+arrangement in which every piece mattered; on 89% of boards the best known line
+uses fewer, and a spare piece parked in the spark's path costs points. See
+[ADR-008](docs/adr/008-optional-pieces-and-a-visible-target.md).
+
 ### Changing the simulation
 
 Any change to `packages/sim` changes what every past score meant. Before and
@@ -156,8 +176,31 @@ The reasoning, including the evidence that cuts against it, is in
 | [005](docs/adr/005-public-daily-seed.md) | Public seed table, offline play, accepted risk |
 | [006](docs/adr/006-player-friendly-monetisation.md) | Rewarded opt-in only, no interstitials |
 | [007](docs/adr/007-canvas-over-game-framework.md) | Canvas 2D instead of a game framework |
+| [008](docs/adr/008-optional-pieces-and-a-visible-target.md) | Pieces are optional; the target is shown |
 
 ---
+
+## Assets
+
+Everything is generated or self-hosted; nothing is fetched at runtime.
+
+| Asset | Source | Licence |
+|---|---|---|
+| Chakra Petch | `@fontsource/chakra-petch`, subset to latin | SIL OFL 1.1 |
+| App icon, splash | Drawn by `scripts/make-icon.mjs` with the game's own palette | this project |
+| Sound | Synthesised at runtime with Web Audio; no audio files exist | — |
+
+Regenerate the icon set after changing `scripts/make-icon.mjs`:
+
+```bash
+node scripts/make-icon.mjs
+cd apps/game && npx @capacitor/assets generate --android --assetPath assets
+```
+
+That tool writes a full-bleed PNG splash at every density, which costs about
+2.3 MB. `android/app/src/main/res/drawable/splash.xml` replaces it with a flat
+colour and the centred mark — delete the regenerated `drawable-land-*` and
+`drawable-port-*` folders and the stray `drawable/splash.png` afterwards.
 
 ## Licence
 

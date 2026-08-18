@@ -28,6 +28,7 @@ import {
   type Placement,
 } from '@fuse/sim';
 import CURATED_SEEDS from './seeds.json' with { type: 'json' };
+import CURATED_PARS from './pars.json' with { type: 'json' };
 
 // ---------------------------------------------------------------------------
 // Board shape and tuning
@@ -387,6 +388,21 @@ export function dailyBoard(date: string): Board {
   return generateBoard(dailySeed(date));
 }
 
+/**
+ * The best score the reference solver found for a date, or null outside the
+ * curated range.
+ *
+ * Shipped as a table because the solver takes seconds and the phone has none to
+ * spare. It is a target, not a proven maximum: a player who beats it has genuinely
+ * beaten the machine, and the UI says so rather than pretending the number is a
+ * ceiling.
+ */
+export function dailyPar(date: string): number | null {
+  const n = puzzleNumber(date);
+  if (n < 1 || n > CURATED_PARS.length) return null;
+  return CURATED_PARS[n - 1];
+}
+
 // ---------------------------------------------------------------------------
 // Reference solver — server and tooling only
 // ---------------------------------------------------------------------------
@@ -536,6 +552,39 @@ function bestNeighbour(
   return { better, betterScore, equal };
 }
 
+/**
+ * Removes pieces that do not earn their place.
+ *
+ * Now that a run may use fewer than the full inventory, a spare piece is not
+ * free: parked in the spark's path it deflects the line and costs points. Any
+ * search that always places five would therefore report a par below the real
+ * best. Greedy removal is enough — dropping a piece never enables another piece
+ * to become useful, so there is no local optimum to escape.
+ */
+export function prune(board: Board, placements: readonly Placement[]): Placement[] {
+  let current = [...placements];
+  let best = scoreOf(board, current);
+
+  for (;;) {
+    let bestDrop = -1;
+    let bestDropScore = best;
+
+    for (let i = 0; i < current.length; i++) {
+      if (current.length <= 1) break;
+      const candidate = current.filter((_, k) => k !== i);
+      const s = scoreOf(board, candidate);
+      if (s >= bestDropScore) {
+        bestDropScore = s;
+        bestDrop = i;
+      }
+    }
+
+    if (bestDrop < 0) return current;
+    current = current.filter((_, k) => k !== bestDrop);
+    best = bestDropScore;
+  }
+}
+
 export function solve(board: Board, opts: SolveOptions = {}): SolveResult {
   const samples = opts.samples ?? 250;
   const climbs = opts.climbs ?? 60;
@@ -583,11 +632,14 @@ export function solve(board: Board, opts: SolveOptions = {}): SolveResult {
       ? 0
       : randomScores[Math.min(randomScores.length - 1, Math.floor(randomScores.length * q))];
 
-  const best = toPlacements(board, bestCells, board.inventory);
-  const ignitedAtPar = best.length === INVENTORY_SIZE ? run(board, best).ignited : 0;
+  // Drop pieces that cost points, so par reflects what a run can actually reach
+  // now that fewer than five placements are legal.
+  const best = bestCells.length > 0 ? prune(board, toPlacements(board, bestCells, board.inventory)) : [];
+  const parScore = best.length > 0 ? run(board, best).score : 0;
+  const ignitedAtPar = best.length > 0 ? run(board, best).ignited : 0;
 
   return {
-    par: Math.max(par, 0),
+    par: Math.max(parScore, 0),
     best,
     median: at(0.5),
     p90: at(0.9),

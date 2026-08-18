@@ -70,6 +70,12 @@ interface Flash {
   t: number;
 }
 
+/** A set of cells the UI wants to point at, used by the tutorial. */
+export interface Highlight {
+  readonly cells: readonly { x: number; y: number }[];
+  readonly tone: 'spark' | 'cool';
+}
+
 export interface PlayHandlers {
   onScore?(score: number, multiplier: number): void;
   onIgnite?(): void;
@@ -92,6 +98,8 @@ export class BoardView {
   private trails = new Map<number, TrailPoint[]>();
   private flashes: Flash[] = [];
   private shake = 0;
+  private highlight: Highlight | null = null;
+  private pulse = 0;
 
   private raf = 0;
   private acc = 0;
@@ -118,6 +126,30 @@ export class BoardView {
 
   setReducedMotion(on: boolean): void {
     this.reducedMotion = on;
+  }
+
+  /**
+   * Marks cells with a slow pulse. Drives its own animation frame when the
+   * simulation is not running, so a highlight is visible on a still board.
+   */
+  setHighlight(highlight: Highlight | null): void {
+    this.highlight = highlight;
+    if (highlight && !this.isPlaying()) this.startPulse();
+    else if (!highlight && !this.isPlaying()) {
+      this.stop();
+      this.draw();
+    }
+  }
+
+  private startPulse(): void {
+    if (this.raf) return;
+    const frame = (now: number): void => {
+      this.pulse = now;
+      this.draw();
+      if (this.highlight && !this.sim) this.raf = requestAnimationFrame(frame);
+      else this.raf = 0;
+    };
+    this.raf = requestAnimationFrame(frame);
   }
 
   setBoard(board: Board): void {
@@ -334,6 +366,7 @@ export class BoardView {
     this.drawNodes(board);
     this.drawOrigin(board);
     this.drawPieces();
+    this.drawHighlight();
     this.drawTrails();
     this.drawSparks();
 
@@ -448,6 +481,29 @@ export class BoardView {
     for (const p of this.placements) {
       drawPieceGlyph(this.ctx, p.piece, this.cx(p.x), this.cy(p.y), this.cell * 0.62, COLOR.piece);
     }
+  }
+
+  private drawHighlight(): void {
+    const h = this.highlight;
+    if (!h) return;
+    const ctx = this.ctx;
+
+    // A 1.6s breath. Slow enough to read as "look here" rather than an alarm.
+    const phase = this.reducedMotion ? 0.6 : (Math.sin(this.pulse / 255) + 1) / 2;
+    const color = h.tone === 'spark' ? this.palette.spark : COLOR.nodeIdle;
+
+    ctx.save();
+    ctx.lineWidth = Math.max(2, this.cell * 0.09);
+    ctx.strokeStyle = this.alpha(color, 0.35 + phase * 0.55);
+    const inset = this.cell * 0.1;
+    const size = this.cell - inset * 2;
+    for (const c of h.cells) {
+      const px = this.ox + c.x * this.cell + inset;
+      const py = this.oy + c.y * this.cell + inset;
+      this.roundRect(px, py, size, size, Math.max(3, this.cell * 0.2));
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   private drawTrails(): void {

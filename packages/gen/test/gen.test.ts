@@ -160,7 +160,20 @@ describe('solve', () => {
   it('finds a scoring solution on a normal board', () => {
     const result = solve(dailyBoard('2026-08-17'), { samples: 600, climbs: 200 });
     expect(result.par).toBeGreaterThan(0);
-    expect(result.best).toHaveLength(INVENTORY_SIZE);
+    // Pruning may drop pieces that cost points, so a solution is 1..5 placements.
+    expect(result.best.length).toBeGreaterThanOrEqual(1);
+    expect(result.best.length).toBeLessThanOrEqual(INVENTORY_SIZE);
+  });
+
+  it('never returns a solution that could be improved by dropping a piece', () => {
+    for (const date of ['2026-08-17', '2026-09-01', '2026-10-05']) {
+      const board = dailyBoard(date);
+      const { best, par } = solve(board, CURATION_BUDGET);
+      for (let i = 0; i < best.length && best.length > 1; i++) {
+        const without = best.filter((_, k) => k !== i);
+        expect(run(board, without).score, `${date} dropping piece ${i}`).toBeLessThan(par);
+      }
+    }
   });
 
   it('returns a solution that actually reproduces par', () => {

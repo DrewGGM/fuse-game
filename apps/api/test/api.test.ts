@@ -196,10 +196,25 @@ describe('POST /v1/runs', () => {
     expect(res.status).toBe(401);
   });
 
+  it('accepts a run that uses fewer pieces than the inventory', async () => {
+    const player = await newPlayer();
+    const board = dailyBoard(TODAY);
+    const partial = solve(board, CURATION_BUDGET).best.slice(0, 1);
+    const score = runSim(board, partial).score;
+
+    const res = await call('POST', '/v1/runs', {
+      token: player.token,
+      body: { date: TODAY, placements: partial, clientScore: score },
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.score).toBe(score);
+  });
+
   it('rejects a body that fails the schema', async () => {
     const player = await newPlayer();
     for (const body of [
       { date: TODAY, placements: [], clientScore: 0 },
+      { date: TODAY, placements: Array.from({ length: 6 }, () => ({ x: 0, y: 0, piece: 1 })), clientScore: 0 },
       { date: 'yesterday', placements: [], clientScore: 0 },
       { date: TODAY, placements: [{ x: -1, y: 0, piece: 1 }], clientScore: 0 },
       { date: TODAY, placements: goodRun(TODAY).placements, clientScore: -5 },
@@ -352,7 +367,8 @@ describe('GET /v1/replays/:date/top', () => {
     const res = await call('GET', `/v1/replays/${TODAY}/top`);
     expect(res.status).toBe(200);
     expect(res.body.score).toBe(score);
-    expect(res.body.placements).toHaveLength(INVENTORY_SIZE);
+    expect(res.body.placements.length).toBeGreaterThanOrEqual(1);
+    expect(res.body.placements.length).toBeLessThanOrEqual(INVENTORY_SIZE);
     // The replay must reproduce the score it claims.
     expect(runSim(dailyBoard(TODAY), res.body.placements).score).toBe(score);
   });

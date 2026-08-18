@@ -6,7 +6,7 @@
  * (though never as a trustworthy *score* — only the replay decides that).
  */
 import { z } from 'zod';
-import { INVENTORY_SIZE, type PieceValue, type Placement } from '@fuse/sim';
+import { INVENTORY_SIZE, MIN_PLACEMENTS, type PieceValue, type Placement } from '@fuse/sim';
 
 /** Ranked attempts per player per UTC day. A game rule and a rate limit at once. */
 export const MAX_ATTEMPTS = 3;
@@ -23,7 +23,9 @@ const PlacementSchema = z.object({
 
 export const RunSubmission = z.object({
   date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-  placements: z.array(PlacementSchema).length(INVENTORY_SIZE),
+  // A run may use fewer pieces than the inventory holds; the simulation checks
+  // the rest. Bounding the array here still caps how much work a payload causes.
+  placements: z.array(PlacementSchema).min(MIN_PLACEMENTS).max(INVENTORY_SIZE),
   clientScore: z.number().int().min(0).max(MAX_SCORE),
 });
 

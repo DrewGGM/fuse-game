@@ -43,6 +43,10 @@
               <span class="meta-l">tu mejor</span>
             </div>
             <div class="meta-cell">
+              <span class="meta-v" id="meta-par">—</span>
+              <span class="meta-l">objetivo</span>
+            </div>
+            <div class="meta-cell">
               <span class="meta-v" id="meta-streak">0</span>
               <span class="meta-l">racha</span>
             </div>
@@ -79,7 +83,10 @@
           <div class="combo-badge" id="combo-badge" hidden>×1</div>
         </div>
 
-        <div class="tray" id="tray" role="toolbar" aria-label="Piezas disponibles"></div>
+        <div class="tray-wrap">
+          <div class="tray" id="tray" role="toolbar" aria-label="Piezas disponibles"></div>
+          <p class="tray-note" id="tray-note">Toca una pieza y luego el tablero. No hace falta usarlas todas.</p>
+        </div>
 
         <div class="game-actions">
           <button class="btn btn-ghost btn-sm" id="btn-undo" disabled>Deshacer</button>
@@ -100,11 +107,13 @@
 
           <div class="result-bar" aria-hidden="true">
             <div class="result-bar-fill" id="result-bar-fill"></div>
+            <div class="result-bar-mark" id="result-bar-mark" hidden></div>
           </div>
           <div class="result-bar-legend">
             <span id="result-best-label">Tu mejor: —</span>
-            <span id="result-par-label">Par: —</span>
+            <span id="result-par-label">Objetivo: —</span>
           </div>
+          <p class="result-gap" id="result-gap"></p>
 
           <div class="result-share" id="result-share"></div>
 
@@ -188,10 +197,34 @@
           <h3 class="settings-h">Apariencia de la chispa</h3>
           <div class="palette-grid" id="palette-grid"></div>
 
+          <h3 class="settings-h">Ayuda</h3>
+          <button class="btn btn-secondary" id="btn-replay-tutorial">Ver el tutorial otra vez</button>
+
           <h3 class="settings-h">Apoyo</h3>
           <div class="support" id="support"></div>
 
           <p class="settings-foot" id="settings-foot"></p>
+        </div>
+      </section>
+
+      <!-- ========================== TUTORIAL ========================== -->
+      <section class="screen screen-tutorial" id="screen-tutorial" data-screen="tutorial" hidden>
+        <header class="tut-head">
+          <span class="tut-step" id="tut-step">1 / 5</span>
+          <button class="btn btn-ghost btn-sm" id="btn-tut-skip">Saltar</button>
+        </header>
+
+        <div class="tut-board-wrap">
+          <canvas id="tut-canvas" aria-label="Tablero del tutorial"></canvas>
+        </div>
+
+        <div class="tut-panel">
+          <p class="tut-text" id="tut-text">…</p>
+          <div class="tut-piece" id="tut-piece" hidden>
+            <canvas id="tut-piece-canvas" width="80" height="80"></canvas>
+            <span id="tut-piece-name">Espejo</span>
+          </div>
+          <button class="btn btn-primary btn-lg" id="btn-tut-next">Siguiente</button>
         </div>
       </section>
 

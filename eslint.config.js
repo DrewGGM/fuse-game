@@ -38,5 +38,15 @@ export default tseslint.config(
       'max-lines-per-function': 'off',
       'no-console': 'off',
     },
+  },
+  {
+    // Tooling scripts straddle two runtimes: Node on the outside, and browser
+    // code inside page.evaluate() bodies that only ever runs in Chromium.
+    // no-undef cannot see that boundary, so it is off here rather than sprinkling
+    // the file with disable comments.
+    files: ['scripts/**/*.mjs', 'scripts/**/*.js'],
+    rules: {
+      'no-undef': 'off',
+    },
   }
 );

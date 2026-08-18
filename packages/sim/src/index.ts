@@ -74,8 +74,17 @@ export const BOMB_RADIUS = 2;
 /** Hard caps. These bound server CPU per submission and keep the sim total. */
 export const MAX_TICKS = 1200;
 export const MAX_SPARKS = 24;
-/** Exactly this many pieces must be placed before a run is legal. */
+/** How many pieces the daily inventory deals. */
 export const INVENTORY_SIZE = 5;
+/**
+ * The smallest legal run.
+ *
+ * The rule used to be "place all five". That quietly told players there was a
+ * single correct arrangement in which every piece mattered — and on most boards
+ * two or three do all the work, so people hunted for a fit that did not exist.
+ * A run now needs at least one piece and at most the whole inventory.
+ */
+export const MIN_PLACEMENTS = 1;
 
 // ---------------------------------------------------------------------------
 // Data shapes
@@ -193,9 +202,9 @@ function hashStep(h: number, v: number): number {
  * (to reject a crafted submission) — same rules, one implementation.
  */
 export function validatePlacements(board: Board, placements: readonly Placement[]): void {
-  if (placements.length !== INVENTORY_SIZE) {
+  if (placements.length < MIN_PLACEMENTS || placements.length > board.inventory.length) {
     throw new InvalidPlacementError(
-      `Expected ${INVENTORY_SIZE} placements, received ${placements.length}`,
+      `Expected between ${MIN_PLACEMENTS} and ${board.inventory.length} placements, received ${placements.length}`,
       'WRONG_COUNT'
     );
   }
@@ -221,13 +230,14 @@ export function validatePlacements(board: Board, placements: readonly Placement[
     seen.add(key);
   }
 
-  // The multiset of placed pieces must match today's inventory exactly.
-  const wanted = countByPiece(board.inventory);
-  const got = countByPiece(placements.map((p) => p.piece));
-  for (let i = 0; i < wanted.length; i++) {
-    if (wanted[i] !== got[i]) {
+  // Placed pieces must be drawn from today's inventory — a sub-multiset of it.
+  // Using two mirrors is fine; conjuring a third one is not.
+  const available = countByPiece(board.inventory);
+  const used = countByPiece(placements.map((p) => p.piece));
+  for (let i = 0; i < available.length; i++) {
+    if (used[i] > available[i]) {
       throw new InvalidPlacementError(
-        'Placed pieces do not match the daily inventory',
+        'Placed pieces are not available in the daily inventory',
         'INVENTORY_MISMATCH'
       );
     }

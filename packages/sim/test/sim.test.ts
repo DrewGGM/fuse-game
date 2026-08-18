@@ -84,10 +84,39 @@ function parkPieces(b: Board, used: Placement[] = []): Placement[] {
 describe('validatePlacements', () => {
   const b = board(['>....', '.....', '.....']);
 
-  it('rejects the wrong number of pieces', () => {
-    expect(() => validatePlacements(b, [{ x: 1, y: 1, piece: Piece.MirrorA }])).toThrow(
-      InvalidPlacementError
+  it('accepts fewer pieces than the inventory holds', () => {
+    // The point of relaxing this: on most boards two or three pieces do all the
+    // work, and forcing five implied a fit that does not exist.
+    expect(() => validatePlacements(b, [{ x: 1, y: 1, piece: Piece.MirrorA }])).not.toThrow();
+    expect(() =>
+      validatePlacements(b, [
+        { x: 1, y: 1, piece: Piece.MirrorA },
+        { x: 3, y: 1, piece: Piece.MirrorA },
+      ])
+    ).not.toThrow();
+  });
+
+  it('rejects an empty run', () => {
+    expect(() => validatePlacements(b, [])).toThrow(InvalidPlacementError);
+  });
+
+  it('rejects more pieces than the inventory holds', () => {
+    const six = Array.from({ length: 6 }, (_, i) => ({ x: i, y: 1, piece: Piece.MirrorA }));
+    expect(() => validatePlacements(b, six)).toThrowError(/between/);
+  });
+
+  it('rejects using a piece more times than it was dealt', () => {
+    // The board's inventory is five MirrorA, so three MirrorB is impossible.
+    const board2 = board(
+      ['>....', '.....', '.....'],
+      [Piece.MirrorA, Piece.MirrorA, Piece.MirrorB, Piece.Splitter, Piece.Boost]
     );
+    expect(() =>
+      validatePlacements(board2, [
+        { x: 1, y: 1, piece: Piece.MirrorB },
+        { x: 2, y: 1, piece: Piece.MirrorB },
+      ])
+    ).toThrowError(/not available/);
   });
 
   it('rejects a piece off the board', () => {
@@ -119,11 +148,45 @@ describe('validatePlacements', () => {
   it('rejects a piece that is not in the daily inventory', () => {
     const p = parkPieces(b);
     p[0] = { ...p[0], piece: Piece.Bomb };
-    expect(() => validatePlacements(b, p)).toThrowError(/do not match the daily inventory/);
+    expect(() => validatePlacements(b, p)).toThrowError(/not available/);
   });
 
-  it('accepts a legal set', () => {
+  it('accepts a legal full set', () => {
     expect(() => validatePlacements(b, parkPieces(b))).not.toThrow();
+  });
+});
+
+describe('partial runs', () => {
+  it('a single well-placed mirror can score', () => {
+    //  row 0:  . . . o .        one MirrorA at (3,1) turns the spark upward
+    //  row 1:  > . . _ .        into the node directly above it
+    const b = board(
+      ['...o.', '>....', '.....'],
+      [Piece.MirrorA, Piece.MirrorA, Piece.MirrorB, Piece.Splitter, Piece.Boost]
+    );
+    const r = run(b, [{ x: 3, y: 1, piece: Piece.MirrorA }]);
+    expect(r.ignited).toBe(1);
+    expect(r.score).toBe(NODE_VALUE);
+  });
+
+  it('an unused piece left on the board can hurt the score', () => {
+    // This is the whole reason for letting players drop pieces: a spare mirror
+    // parked in the path deflects the spark away from nodes it would have lit.
+    const b = board(
+      ['.....', '>oo.o', '.....'],
+      [Piece.MirrorA, Piece.MirrorA, Piece.MirrorA, Piece.MirrorA, Piece.MirrorA]
+    );
+
+    // One mirror, parked out of the way: the spark runs the whole row.
+    const clean = run(b, [{ x: 0, y: 2, piece: Piece.MirrorA }]);
+    expect(clean.ignited).toBe(3);
+
+    // A second mirror dropped in the gap at (3,1) turns the spark off the row.
+    const cluttered = run(b, [
+      { x: 0, y: 2, piece: Piece.MirrorA },
+      { x: 3, y: 1, piece: Piece.MirrorA },
+    ]);
+    expect(cluttered.ignited).toBe(2);
   });
 });
 

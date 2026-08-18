@@ -9,6 +9,7 @@
  */
 import { NODE_VALUE, type Board } from '@fuse/sim';
 import { puzzleNumber } from '@fuse/gen';
+import { formatScore } from './format.js';
 
 export interface ShareInput {
   readonly date: string;
@@ -34,7 +35,7 @@ export function shareText(input: ShareInput): string {
   return [
     `Fuse #${n}`,
     `${bar}  ${input.ignited}/${input.totalNodes}`,
-    `${input.score.toLocaleString('es')} pts  ${tries}`,
+    `${formatScore(input.score)} pts  ${tries}`,
   ].join('\n');
 }
 

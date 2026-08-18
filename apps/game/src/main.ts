@@ -10,16 +10,14 @@
  */
 import './style.css';
 import {
-  INVENTORY_SIZE,
   Piece,
   countNodes,
   run as runSim,
   validatePlacements,
   type Board,
-  type PieceValue,
   type Placement,
 } from '@fuse/sim';
-import { dailyBoard, puzzleNumber, utcDate } from '@fuse/gen';
+import { dailyBoard, dailyPar, puzzleNumber, utcDate } from '@fuse/gen';
 import {
   BoardView,
   PALETTES,
@@ -39,11 +37,13 @@ import {
   type Reward,
 } from './commerce.js';
 import { shareSummary, shareText, verdict } from './share.js';
+import { Tutorial } from './tutorial.js';
 import * as store from './storage.js';
+import { formatScore } from './format.js';
 
 const MAX_ATTEMPTS = 3;
 
-type ScreenName = 'home' | 'game' | 'result' | 'archive' | 'howto' | 'settings';
+type ScreenName = 'home' | 'game' | 'result' | 'archive' | 'howto' | 'settings' | 'tutorial';
 
 interface Session {
   readonly date: string;
@@ -73,6 +73,7 @@ const ui = {
     archive: el('screen-archive'),
     howto: el('screen-howto'),
     settings: el('screen-settings'),
+    tutorial: el('screen-tutorial'),
   } as Record<ScreenName, HTMLElement>,
 
   dailyNo: el('daily-no'),
@@ -80,6 +81,7 @@ const ui = {
   metaAttempts: el('meta-attempts'),
   metaBest: el('meta-best'),
   metaStreak: el('meta-streak'),
+  metaPar: el('meta-par'),
   btnPlay: el<HTMLButtonElement>('btn-play'),
   dailyDone: el('daily-done'),
   resetNote: el('reset-note'),
@@ -94,11 +96,14 @@ const ui = {
   btnClear: el<HTMLButtonElement>('btn-clear'),
   btnLaunch: el<HTMLButtonElement>('btn-launch'),
   launchHint: el('launch-hint'),
+  trayNote: el('tray-note'),
 
   resultLabel: el('result-label'),
   resultScore: el('result-score'),
   resultDetail: el('result-detail'),
   resultBarFill: el('result-bar-fill'),
+  resultBarMark: el('result-bar-mark'),
+  resultGap: el('result-gap'),
   resultBestLabel: el('result-best-label'),
   resultParLabel: el('result-par-label'),
   resultShare: el('result-share'),
@@ -116,6 +121,14 @@ const ui = {
   setReduced: el<HTMLInputElement>('set-reduced'),
 
   toast: el('toast'),
+
+  tutCanvas: el<HTMLCanvasElement>('tut-canvas'),
+  tutStep: el('tut-step'),
+  tutText: el('tut-text'),
+  tutPiece: el('tut-piece'),
+  tutPieceCanvas: el<HTMLCanvasElement>('tut-piece-canvas'),
+  tutPieceName: el('tut-piece-name'),
+  btnTutNext: el<HTMLButtonElement>('btn-tut-next'),
 };
 
 // ---------------------------------------------------------------------------
@@ -133,6 +146,7 @@ let today = utcDate();
 let palette: Palette = paletteById(store.load().settings.palette);
 let audio: AudioContext | null = null;
 let toastTimer = 0;
+let tutorial: Tutorial | null = null;
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -144,6 +158,51 @@ function show(name: ScreenName): void {
   }
   if (name === 'game') requestAnimationFrame(() => boardView.resize());
   if (name === 'home') requestAnimationFrame(() => previewView.resize());
+  if (name === 'tutorial') requestAnimationFrame(() => tutorial?.resize());
+}
+
+/**
+ * Runs the first-run tutorial, then hands over to the daily board.
+ *
+ * Marked done on finish *and* on skip: someone who skips has made a choice, and
+ * showing it again would override that choice every launch.
+ */
+/** Kept next to the tutorial copy it belongs to, so the two cannot drift apart. */
+const LESSON =
+  'No hay una solución correcta que encontrar: colocas lo que quieras y persigues la puntuación más alta.';
+
+function startTutorial(): void {
+  tutorial ??= new Tutorial(
+    ui.tutCanvas,
+    {
+      step: ui.tutStep,
+      text: ui.tutText,
+      piece: ui.tutPiece,
+      pieceCanvas: ui.tutPieceCanvas,
+      pieceName: ui.tutPieceName,
+      next: ui.btnTutNext,
+    },
+    {
+      onFinish: finishTutorial,
+      onIgnite: () => blip(700, 0.06, 'triangle', 0.05),
+      onScore: (score) => {
+        // Prefix rather than replace: the sentence underneath is the whole point
+        // of the tutorial, and overwriting it threw away the lesson.
+        ui.tutText.textContent = `${formatScore(score)} puntos con una sola pieza. ${LESSON}`;
+      },
+    }
+  );
+  tutorial.start();
+  show('tutorial');
+}
+
+function finishTutorial(): void {
+  store.update((d) => {
+    d.tutorialDone = true;
+  });
+  tutorial?.stop();
+  renderHome();
+  show('home');
 }
 
 function toast(message: string): void {
@@ -178,10 +237,6 @@ function blip(freq: number, duration = 0.06, type: OscillatorType = 'sine', gain
   }
 }
 
-function formatScore(n: number): string {
-  return n.toLocaleString('es');
-}
-
 // ---------------------------------------------------------------------------
 // Home
 // ---------------------------------------------------------------------------
@@ -196,6 +251,8 @@ function renderHome(): void {
   ui.metaAttempts.textContent = String(left);
   ui.metaBest.textContent = result ? formatScore(result.best) : '—';
   ui.metaStreak.textContent = String(store.currentStreak(today));
+  const par = dailyPar(today);
+  ui.metaPar.textContent = par ? formatScore(par) : '—';
 
   previewView.setPalette(palette);
   previewView.setBoard(board);
@@ -299,13 +356,20 @@ function renderTray(): void {
 
 function syncControls(): void {
   if (!session) return;
-  const complete = session.placements.length === INVENTORY_SIZE;
-  ui.btnLaunch.disabled = !complete;
-  ui.btnUndo.disabled = session.placements.length === 0;
-  ui.btnClear.disabled = session.placements.length === 0;
-  ui.launchHint.textContent = complete
-    ? 'Un solo toque'
-    : `Coloca ${INVENTORY_SIZE - session.placements.length} pieza${INVENTORY_SIZE - session.placements.length === 1 ? '' : 's'}`;
+  const used = session.placements.length;
+  const total = session.board.inventory.length;
+
+  // One piece is enough. Requiring all five implied there was an arrangement in
+  // which every piece mattered, and on most boards two or three do all the work.
+  ui.btnLaunch.disabled = used < 1;
+  ui.btnUndo.disabled = used === 0;
+  ui.btnClear.disabled = used === 0;
+  ui.launchHint.textContent =
+    used === 0 ? 'Coloca al menos una pieza' : `${used} de ${total} · un solo toque`;
+  ui.trayNote.textContent =
+    used === 0
+      ? 'Toca una pieza y luego el tablero. No hace falta usarlas todas.'
+      : 'Puedes encender ya, o seguir colocando.';
   boardView.setPlacements(session.placements);
 }
 
@@ -333,8 +397,8 @@ function onBoardTap(clientX: number, clientY: number): void {
   const candidate = [...session.placements, { x: cell.x, y: cell.y, piece }];
   try {
     // Ask the simulation whether this is legal instead of duplicating the rules.
-    if (candidate.length === INVENTORY_SIZE) validatePlacements(session.board, candidate);
-    else assertPartialPlacementIsLegal(session.board, candidate);
+    // Partial sets are legal now, so there is one code path and no special case.
+    validatePlacements(session.board, candidate);
   } catch {
     blip(180, 0.08, 'sawtooth', 0.03);
     toast('Ahí no cabe una pieza');
@@ -348,35 +412,6 @@ function onBoardTap(clientX: number, clientY: number): void {
   syncControls();
 }
 
-/**
- * Partial sets cannot go through `validatePlacements`, which requires a full
- * inventory. Rather than reimplement the rules, pad the set out to full length
- * with the remaining pieces on arbitrary free cells and validate that.
- */
-function assertPartialPlacementIsLegal(board: Board, partial: Placement[]): void {
-  const taken = new Set(partial.map((p) => p.y * board.w + p.x));
-  const padded = [...partial];
-  const remaining: PieceValue[] = [];
-  const used = board.inventory.map(() => false);
-  for (const p of partial) {
-    const i = board.inventory.findIndex((piece, idx) => piece === p.piece && !used[idx]);
-    if (i >= 0) used[i] = true;
-  }
-  board.inventory.forEach((piece, i) => {
-    if (!used[i]) remaining.push(piece);
-  });
-
-  for (let i = 0; i < board.cells.length && remaining.length > 0; i++) {
-    if (board.cells[i] !== 0 || taken.has(i)) continue;
-    const x = i % board.w;
-    const y = Math.floor(i / board.w);
-    if (x === board.originX && y === board.originY) continue;
-    padded.push({ x, y, piece: remaining.pop()! });
-    taken.add(i);
-  }
-  validatePlacements(board, padded);
-}
-
 function nextFreeSlot(): number | null {
   const used = usedSlots();
   const i = used.findIndex((u) => !u);
@@ -384,7 +419,7 @@ function nextFreeSlot(): number | null {
 }
 
 function launch(): void {
-  if (!session || session.placements.length !== INVENTORY_SIZE) return;
+  if (!session || session.placements.length < 1) return;
   const s = session;
 
   ui.btnLaunch.disabled = true;
@@ -432,17 +467,16 @@ function renderResult(s: Session): void {
 
   const stored = s.ranked ? store.getResult(s.date) : null;
   const best = stored?.best ?? r.score;
+  const par = dailyPar(s.date);
 
   ui.resultLabel.textContent = s.ranked ? `Reto #${puzzleNumber(s.date)}` : 'Práctica';
   ui.resultScore.textContent = formatScore(r.score);
-  ui.resultDetail.textContent = `${verdict(r.score, r.ignited, r.total)}  ${r.ignited} de ${r.total} nodos`;
+  // The detail line states facts; the gap line does the judging. Keeping them
+  // separate stopped the screen contradicting itself — it used to say "there's
+  // more in there" on a run that had just matched the target.
+  ui.resultDetail.textContent = `${r.ignited} de ${r.total} nodos encendidos`;
 
-  ui.resultBarFill.style.width = '0%';
-  requestAnimationFrame(() => {
-    ui.resultBarFill.style.width = `${r.total > 0 ? Math.round((r.ignited / r.total) * 100) : 0}%`;
-  });
-  ui.resultBestLabel.textContent = `Tu mejor: ${formatScore(best)}`;
-  ui.resultParLabel.textContent = `${r.ignited}/${r.total} nodos`;
+  renderTargetBar(r.score, best, par, verdict(r.score, r.ignited, r.total));
 
   const left = s.ranked ? store.attemptsLeft(s.date, MAX_ATTEMPTS) : Infinity;
   ui.btnRetry.hidden = left <= 0;
@@ -463,6 +497,49 @@ function renderResult(s: Session): void {
   renderOffers(s);
   show('result');
   blip(520, 0.12, 'sine', 0.05);
+}
+
+/**
+ * Shows the score against the day's target.
+ *
+ * Without this the result screen was a bare number: a player had no way to tell
+ * whether 5,400 was a triumph or a fumble, which is most of why the game read as
+ * a puzzle with a hidden answer. Par is the best the reference solver found, not
+ * a proven maximum, and the copy says so when you beat it.
+ */
+function renderTargetBar(score: number, best: number, par: number | null, verdictText = ''): void {
+  const ceiling = Math.max(par ?? 0, best, score, 1);
+
+  ui.resultBarFill.style.width = '0%';
+  requestAnimationFrame(() => {
+    ui.resultBarFill.style.width = `${Math.round((score / ceiling) * 100)}%`;
+  });
+
+  ui.resultBestLabel.textContent = `Tu mejor: ${formatScore(best)}`;
+
+  if (par === null) {
+    // No target for this day: fall back to a plain read of how it went.
+    ui.resultBarMark.hidden = true;
+    ui.resultParLabel.textContent = '';
+    ui.resultGap.textContent = verdictText;
+    ui.resultGap.dataset.tone = 'normal';
+    return;
+  }
+
+  ui.resultBarMark.hidden = false;
+  ui.resultBarMark.style.left = `${Math.round((par / ceiling) * 100)}%`;
+  ui.resultParLabel.textContent = `Objetivo: ${formatScore(par)}`;
+
+  if (score > par) {
+    ui.resultGap.textContent = 'Has batido el mejor resultado conocido.';
+    ui.resultGap.dataset.tone = 'good';
+  } else if (score === par) {
+    ui.resultGap.textContent = 'Has igualado el objetivo. Nadie lo ha hecho mejor.';
+    ui.resultGap.dataset.tone = 'good';
+  } else {
+    ui.resultGap.textContent = `Te faltan ${formatScore(par - score)} para el objetivo.`;
+    ui.resultGap.dataset.tone = 'normal';
+  }
 }
 
 function renderOffers(s: Session): void {
@@ -750,7 +827,17 @@ function bindResult(): void {
   });
 }
 
+function bindTutorial(): void {
+  ui.btnTutNext.addEventListener('click', () => {
+    blip(600, 0.04, 'square', 0.03);
+    tutorial?.next();
+  });
+  el('btn-tut-skip').addEventListener('click', finishTutorial);
+}
+
 function bindSettings(): void {
+  el('btn-replay-tutorial').addEventListener('click', startTutorial);
+
   ui.setReminder.addEventListener('change', () => {
     store.update((d) => {
       d.settings.reminder = ui.setReminder.checked;
@@ -783,6 +870,7 @@ function bind(): void {
   bindGame();
   bindResult();
   bindSettings();
+  bindTutorial();
 
   window.addEventListener('resize', () => {
     boardView.resize();
@@ -804,7 +892,10 @@ function boot(): void {
   }
   bind();
   renderHome();
-  show('home');
+
+  if (!data.tutorialDone) startTutorial();
+  else show('home');
+
   void ads.ensureConsent();
 }
 
@@ -822,8 +913,11 @@ window.__fuse = {
     return session;
   },
   startSession,
+  startTutorial,
+  finishTutorial,
   onBoardTap,
   launch,
+  dailyPar,
   store,
   utcDate,
   dailyBoard,
