@@ -271,4 +271,12 @@ colour and the centred mark — delete the regenerated `drawable-land-*` and
 
 ## Licence
 
-Not yet chosen. All rights reserved until then.
+[PolyForm Noncommercial 1.0.0](LICENSE.md).
+
+Read it, learn from it, fork it, run it yourself, send a patch — all fine.
+Publishing it to an app store or selling it is not: that right stays with the
+author, because this is a commercial game and its store listing is the thing
+worth protecting. A clone on Play would be a licence violation, not merely
+against Google's rules.
+
+If you want to use any of it commercially, ask.
