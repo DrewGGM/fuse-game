@@ -26,12 +26,13 @@
     "grade": "tsx --tsconfig tsconfig.json scripts/grade-boards.ts",
     "seeds": "tsx --tsconfig tsconfig.json scripts/build-seeds.ts",
     "fingerprint": "tsx --tsconfig tsconfig.json scripts/checksum-baseline.ts",
-    "android:sync": "npm run build --workspace=@fuse/game && cd apps/game && npx cap sync android",
+    "android:sync": "npm run build --workspace=@fuse/game && cd apps/game && npx cap sync android && cd ../.. && node scripts/harden-android.mjs",
     "pars": "tsx --tsconfig tsconfig.json scripts/build-pars.ts",
     "show": "tsx --tsconfig tsconfig.json scripts/show-board.ts",
     "verify:seeds": "tsx --tsconfig tsconfig.json scripts/verify-all-seeds.ts",
     "audit": "npm audit --omit=dev --audit-level=moderate",
-    "csp:check": "node scripts/csp-check.mjs"
+    "csp:check": "node scripts/csp-check.mjs",
+    "android:harden": "node scripts/harden-android.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
