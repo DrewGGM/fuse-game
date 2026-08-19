@@ -13,6 +13,7 @@ concurrency:
 # a compromised dependency running in a job with a write-scoped token could push.
 permissions:
   contents: read
+  deployments: write
 
 jobs:
   verify:
@@ -93,3 +94,88 @@ jobs:
       - name: Build AAB
         run: ./gradlew bundleDebug --no-daemon
         working-directory: apps/game/android
+
+  # ---------------------------------------------------------------------------
+  # Deploy the API
+  #
+  # Only after both `verify` and `android` pass, and only on main. The Android
+  # job is included on purpose: the AAB and the Worker share the simulation, so
+  # a commit that breaks the app build should not put its server half live.
+  #
+  # The app itself is not deployed from here — it goes to Play through a signed
+  # bundle and a review queue. See docs/release.md.
+  # ---------------------------------------------------------------------------
+  deploy-api:
+    needs: [verify, android]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    concurrency:
+      group: deploy-fuse-api
+      cancel-in-progress: false
+
+    environment:
+      name: production
+      url: https://api.fuse.andrewgarcia.dev
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Until the two secrets exist this job reports a notice and stops, rather
+      # than failing. A red X on every push for a setup step nobody has done yet
+      # teaches people to ignore red X's.
+      - name: Are the Cloudflare credentials configured?
+        id: creds
+        run: |
+          if [ -z "${{ secrets.CLOUDFLARE_API_TOKEN }}" ] || [ -z "${{ secrets.CLOUDFLARE_ACCOUNT_ID }}" ]; then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "::notice title=Deploy skipped::Set CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID in repository secrets."
+          else
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Migrations run before the code that depends on them, and wrangler only
+      # applies what has not been applied. They are forward-only and additive by
+      # convention (see the migration discipline in the blueprint) — a migration
+      # that drops or renames a column would run automatically here, which is
+      # exactly why that convention exists.
+      - name: Apply database migrations
+        if: steps.creds.outputs.ready == 'true'
+        working-directory: apps/api
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: npx wrangler d1 migrations apply fuse-db --remote
+
+      - name: Deploy the Worker
+        if: steps.creds.outputs.ready == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: apps/api
+          command: deploy
+
+      # A deployed Worker that cannot reach its database returns 500 on the
+      # first real request. Better to find that here than from a player.
+      - name: Smoke test the live API
+        if: steps.creds.outputs.ready == 'true'
+        run: |
+          set -e
+          url="${{ vars.FUSE_API_BASE || 'https://api.fuse.andrewgarcia.dev' }}"
+          echo "checking $url"
+          code=$(curl -s -o /tmp/body.json -w '%{http_code}' -X POST "$url/v1/players")
+          echo "POST /v1/players -> $code"
+          test "$code" = "201"
+          # A player row means the D1 binding and the token secret are both live.
+          grep -q '"token"' /tmp/body.json
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$url/v1/daily/$(date -u +%F)")
+          echo "GET /v1/daily/today -> $code"
+          test "$code" = "200"

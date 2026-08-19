@@ -37,3 +37,7 @@ midrun.txt
 
 # wrangler dev scratch
 apps/api/.wrangler/
+
+# wrangler local secrets — never committed
+.dev.vars
+**/.dev.vars

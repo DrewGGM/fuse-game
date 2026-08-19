@@ -8,6 +8,16 @@ against it, and the app has to be built before anything can be uploaded.
 
 ---
 
+## Deploying on every push
+
+Once the two Cloudflare secrets are set, a push to `main` that passes CI
+deploys the API itself — migrations included. Setup and the exact token scopes
+are in the web repository:
+[fuse-web/docs/continuous-deployment.md](https://github.com/DrewGGM/fuse-web/blob/main/docs/continuous-deployment.md).
+
+The steps below are the first-time provisioning, which has to happen once by
+hand because it creates the resources the pipeline then updates.
+
 ## 1. The backend
 
 ```bash
@@ -26,9 +36,17 @@ npx wrangler deploy
 ```
 
 **About `TOKEN_SECRET`.** It signs the anonymous player tokens. Generate it with
-`openssl rand -base64 32` or equivalent — never reuse the development value in
-`wrangler.toml`, which is committed and therefore public. Rotating it later logs
-every device out of its identity, so put it somewhere you will not lose it.
+`openssl rand -base64 32` or equivalent, and never reuse the development value
+from `apps/api/.dev.vars` — that file is gitignored and local-only, and its
+contents are known.
+
+It briefly lived in a `[vars]` block in `wrangler.toml` for local development,
+which would have deployed a known value as the production secret. Vars in that
+file are not overridden by secrets; they simply *become* the deployed value.
+Local development reads `.dev.vars` instead, which `wrangler deploy` ignores.
+
+Rotating it later logs every device out of its identity, so put it somewhere you
+will not lose it.
 
 Check it answers:
 
@@ -177,7 +195,7 @@ watched grants a ranked attempt. Keep it that way.
 
 ```
 [ ] wrangler d1 create + migrations applied --remote
-[ ] TOKEN_SECRET set as a secret, not a var
+[ ] TOKEN_SECRET set with `wrangler secret put`, not as a var in wrangler.toml
 [ ] Worker deployed and answering POST /v1/players
 [ ] Security headers added to Worker responses
 [ ] Rate limit on POST /v1/players

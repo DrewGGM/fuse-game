@@ -14,11 +14,19 @@ database_name = "fuse-db"
 database_id = "local-dev-placeholder"
 migrations_dir = "migrations"
 
-# TOKEN_SECRET is a secret, never a var:
-#   npx wrangler secret put TOKEN_SECRET
+# The site answers on a subdomain of the same zone as the web build, so both
+# halves of the product sit on one zone and there is one place to reason about
+# DNS. Cloudflare creates the record on deploy.
+[[routes]]
+pattern = "api.fuse.andrewgarcia.dev"
+custom_domain = true
 
-# Local development only. `wrangler dev` never contacts the real D1, and the
-# secret below is not one — the real TOKEN_SECRET is set with
-# `wrangler secret put TOKEN_SECRET` and never lives in this file.
-[vars]
-TOKEN_SECRET = "local-development-only-not-a-secret"
+# TOKEN_SECRET is deliberately NOT here.
+#
+# It signs player tokens, so it is set once with
+#   npx wrangler secret put TOKEN_SECRET
+# and lives only in Cloudflare. It briefly sat in a [vars] block for local
+# development, which would have shipped a known value to production and
+# overridden the real secret — vars in this file win over nothing, they simply
+# become the deployed value. Local development reads it from .dev.vars, which
+# is gitignored.
