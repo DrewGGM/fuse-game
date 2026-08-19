@@ -8,12 +8,20 @@
  * new CDN dependency quietly needs the CSP relaxed. A failing test here is a
  * prompt to make that trade-off on purpose.
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-const read = (rel: string): string =>
-  readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
+const read = (rel: string): string => {
+  const path = fileURLToPath(new URL(rel, import.meta.url));
+  if (!existsSync(path)) {
+    // A generated file that is not in the repository is the finding, not a
+    // broken test: it means the hardened copy exists only on one machine and
+    // whatever regenerates it will ship the unhardened default.
+    throw new Error(`${rel} is missing — is it in .gitignore? Hardening must be tracked.`);
+  }
+  return readFileSync(path, 'utf8');
+};
 
 /**
  * Strips comments before matching.

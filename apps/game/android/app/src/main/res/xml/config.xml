@@ -1,0 +1,15 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!--
+  Cordova compatibility shim, present because Capacitor generates it.
+
+  It ships with the Cordova whitelist wide open. No Cordova plugin is installed
+  and nothing reads this file today, but a wildcard sitting in the tree is the
+  kind of thing that quietly becomes load bearing later.
+
+  This file is tracked on purpose, against Capacitor's own .gitignore: while it
+  was untracked, `cap sync` silently restored the wildcard and the hardened copy
+  existed only on one machine. Tracked, a regeneration shows up as a diff.
+-->
+<widget version="1.0.0" xmlns="http://www.w3.org/ns/widgets" xmlns:cdv="http://cordova.apache.org/ns/1.0">
+  <access origin="https://fuse-api.workers.dev" />
+</widget>

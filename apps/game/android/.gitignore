@@ -98,4 +98,10 @@ app/src/main/assets/public
 # Generated Config files
 app/src/main/assets/capacitor.config.json
 app/src/main/assets/capacitor.plugins.json
-app/src/main/res/xml/config.xml
+# config.xml is NOT ignored.
+#
+# Capacitor regenerates it with <access origin="*" />, the Cordova whitelist
+# wide open. Leaving it untracked meant the hardened version lived only on one
+# machine — the fix passed locally and the guard test failed in CI, which is how
+# this was found. Tracking it makes the regeneration visible in a diff.
+# app/src/main/res/xml/config.xml
