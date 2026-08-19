@@ -9,7 +9,7 @@ import { expect, test, type Page } from '@playwright/test';
 
 const BOARD_PAD = 10; // must match BoardView's padding
 const TUT_W = 7;
-const TUT_H = 9;
+const TUT_H = 6;
 
 /** Taps a cell on the tutorial board. */
 async function tapTutorialCell(page: Page, x: number, y: number): Promise<void> {
@@ -80,6 +80,15 @@ test('a wrong tap is corrected, not punished', async ({ page }) => {
 
   await tapTutorialCell(page, 3, 4);
   await expect(page.locator('#tut-step')).toHaveText('4 / 5');
+});
+
+test('the skip button disappears on the last step', async ({ page }) => {
+  await expect(page.locator('#btn-tut-skip')).toBeVisible();
+  for (let i = 0; i < 2; i++) await page.locator('#btn-tut-next').click();
+  await tapTutorialCell(page, 3, 4);
+  await page.locator('#btn-tut-next').click();
+  await expect(page.locator('#tut-step')).toHaveText('5 / 5');
+  await expect(page.locator('#btn-tut-skip')).toBeHidden();
 });
 
 test('skipping is remembered, so it never nags again', async ({ page }) => {

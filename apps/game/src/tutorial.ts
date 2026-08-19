@@ -17,7 +17,9 @@ import { Cell, Dir, Piece, type Board, type Placement } from '@fuse/sim';
 import { BoardView, drawPieceGlyph } from './board-view.js';
 
 const W = 7;
-const H = 9;
+// Sized to the lesson and nothing more. It was 9 rows deep, which left four
+// empty ones under the action and shrank everything that mattered.
+const H = 6;
 
 /**
  * A board with exactly one obvious move.
@@ -111,6 +113,7 @@ export class Tutorial {
       pieceCanvas: HTMLCanvasElement;
       pieceName: HTMLElement;
       next: HTMLButtonElement;
+      skip: HTMLElement;
     },
     private handlers: TutorialHandlers
   ) {
@@ -179,6 +182,8 @@ export class Tutorial {
     this.els.text.textContent = step.text;
     this.els.next.textContent = step.nextLabel ?? 'Siguiente';
     this.els.next.hidden = step.awaitPlacement === true;
+    // Skipping is only meaningful while there is something left to skip.
+    this.els.skip.hidden = this.index === STEPS.length - 1;
 
     this.els.piece.hidden = step.showPiece !== true;
     if (step.showPiece) {

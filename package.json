@@ -1,7 +1,7 @@
 {
   "name": "fuse",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Fuse — a daily chain-reaction puzzle. Same board, same five pieces, one spark.",
   "type": "module",
   "workspaces": [

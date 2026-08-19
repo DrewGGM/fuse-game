@@ -3,7 +3,12 @@ import { fileURLToPath } from 'node:url';
 
 const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
+import pkg from './package.json' with { type: 'json' };
+
 export default defineConfig({
+  define: {
+    __APP_VERSION__: JSON.stringify(pkg.version),
+  },
   base: './', // Capacitor serves from a file:// style origin, so no absolute paths.
   resolve: {
     alias: {

@@ -1,6 +1,6 @@
 {
   "name": "@fuse/game",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "private": true,
   "type": "module",
   "description": "Fuse — the playable client. Canvas for the board, DOM for everything around it.",

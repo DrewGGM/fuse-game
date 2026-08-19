@@ -290,7 +290,8 @@ h3 {
  */
 .preview-wrap {
   flex: 1;
-  min-height: 0;
+  /* Never let the board become the smallest thing on its own card. */
+  min-height: 180px;
   display: grid;
   place-items: center;
 }
@@ -1002,6 +1003,85 @@ h3 {
   from {
     opacity: 0;
     transform: translate(-50%, 10px);
+  }
+}
+
+/*
+ * Short screens.
+ *
+ * On a 360x640 phone the chrome ate enough height to shrink board cells to 29px,
+ * which is below a comfortable touch target, and squeezed the home preview to a
+ * postage stamp. The board is the thing people came for, so on short viewports
+ * the surrounding furniture gives up its space instead.
+ */
+@media (max-height: 700px) {
+  .screen {
+    padding: calc(var(--safe-top) + 8px) 14px calc(var(--safe-bottom) + 8px);
+  }
+  .daily-card {
+    gap: 9px;
+    padding: 12px;
+    margin-bottom: 9px;
+  }
+  .wordmark h1 {
+    font-size: 1.35rem;
+  }
+  .home-head {
+    margin-bottom: 2px;
+  }
+  .meta-cell {
+    padding: 6px 4px;
+  }
+  .meta-v {
+    font-size: 1.1rem;
+  }
+  .btn-lg {
+    min-height: 48px;
+  }
+  .daily-done,
+  .reset-note {
+    font-size: 0.72rem;
+  }
+  .reset-note {
+    margin-top: 7px;
+  }
+
+  .game-head {
+    margin-bottom: 4px;
+  }
+  .tray-wrap {
+    margin: 6px 0;
+    gap: 3px;
+  }
+  .slot {
+    width: 48px;
+    height: 48px;
+  }
+  .slot canvas {
+    width: 34px;
+    height: 34px;
+  }
+  .tray {
+    min-height: 48px;
+  }
+  /* The hint has done its job by the time the board is this tight. */
+  .tray-note {
+    font-size: 0.68rem;
+    max-width: 30ch;
+  }
+  .btn-launch,
+  .game-actions .btn {
+    min-height: 46px;
+  }
+  .launch-hint {
+    font-size: 0.64rem;
+  }
+}
+
+/* Very short screens: drop the tray hint entirely rather than shrink the board. */
+@media (max-height: 620px) {
+  .tray-note {
+    display: none;
   }
 }
 

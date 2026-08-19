@@ -181,6 +181,7 @@ function startTutorial(): void {
       pieceCanvas: ui.tutPieceCanvas,
       pieceName: ui.tutPieceName,
       next: ui.btnTutNext,
+      skip: el('btn-tut-skip'),
     },
     {
       onFinish: finishTutorial,
@@ -685,7 +686,9 @@ function renderSettings(): void {
   }
 
   void renderSupport();
-  ui.settingsFoot.textContent = `Chispas: ${data.sparks} · Fuse v0.1.0`;
+  // Injected from package.json at build time; a hardcoded string had already
+  // drifted a version behind the app it was printed in.
+  ui.settingsFoot.textContent = `Chispas: ${data.sparks} · Fuse v${__APP_VERSION__}`;
 }
 
 function paintPaletteSwatch(canvas: HTMLCanvasElement, p: Palette): void {
@@ -907,6 +910,7 @@ declare global {
   interface Window {
     __fuse?: Record<string, unknown>;
   }
+  const __APP_VERSION__: string;
 }
 window.__fuse = {
   get session() {
