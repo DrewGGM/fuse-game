@@ -1,6 +1,6 @@
 {
   "name": "@fuse/game",
-  "version": "0.2.0",
+  "version": "0.2.2",
   "private": true,
   "type": "module",
   "description": "Fuse — the playable client. Canvas for the board, DOM for everything around it.",
@@ -12,6 +12,7 @@
   "dependencies": {
     "@capacitor/android": "^8.5.0",
     "@capacitor/core": "^8.5.0",
+    "@capacitor/local-notifications": "^8.3.0",
     "@fontsource/chakra-petch": "^5.3.0",
     "@fuse/gen": "*",
     "@fuse/sim": "*"

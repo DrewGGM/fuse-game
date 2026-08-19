@@ -29,8 +29,13 @@
       frame-ancestors is absent on purpose — it is ignored in a <meta> tag and
       only works as a response header. The app is not framed (it loads from
       the local scheme), and the API sets X-Frame-Options itself.
+
+      %API_ORIGIN% is substituted at build time with whatever API the build
+      points at. Hardcoding the production host meant a local `wrangler dev`
+      build silently had its own API blocked — which did at least prove the
+      policy is enforced, and that the offline queue handles it.
     -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; media-src 'self' blob:; connect-src 'self' https://fuse-api.workers.dev; base-uri 'none'; form-action 'none'; object-src 'none'" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; media-src 'self' blob:; connect-src 'self' %API_ORIGIN%; base-uri 'none'; form-action 'none'; object-src 'none'" />
     <meta name="theme-color" content="#070B0D" />
     <meta name="description" content="Fuse — un reto de reacción en cadena al día. El mismo tablero para todo el mundo." />
     <title>Fuse</title>
@@ -90,6 +95,7 @@
         </nav>
 
         <p class="reset-note" id="reset-note"></p>
+        <p class="sync-note" id="home-sync-note" hidden></p>
       </section>
 
       <!-- ============================ GAME ============================ -->
@@ -142,10 +148,21 @@
           </div>
           <p class="result-gap" id="result-gap"></p>
 
+          <div class="rank-card" id="rank-card" hidden>
+            <div class="rank-line">
+              <span class="rank-pos" id="rank-pos">—</span>
+              <span class="rank-of" id="rank-of"></span>
+            </div>
+            <div class="rank-board" id="rank-board"></div>
+            <button class="btn btn-ghost btn-sm" id="btn-full-board">Ver clasificación</button>
+          </div>
+          <p class="sync-note" id="sync-note" hidden></p>
+
           <div class="result-share" id="result-share"></div>
 
           <div class="result-actions">
             <button class="btn btn-primary" id="btn-share">Compartir</button>
+            <button class="btn btn-secondary" id="btn-clip" hidden>Guardar clip</button>
             <button class="btn btn-secondary" id="btn-retry">Otro intento</button>
             <button class="btn btn-ghost" id="btn-result-home">Inicio</button>
           </div>
@@ -177,12 +194,14 @@
         <div class="howto">
           <p class="howto-lead">
             Todo el mundo recibe hoy el mismo tablero y las mismas cinco piezas.
-            Colócalas, enciende una sola chispa, y mira qué pasa.
+            Coloca las que quieras, enciende una sola chispa, y mira qué pasa.
+            No hay una solución correcta: persigues la puntuación más alta.
           </p>
           <ul class="howto-rules">
             <li><b>La chispa</b> avanza en línea recta y pierde energía en cada paso.</li>
             <li><b>Los nodos</b> se encienden al pasar por encima. Cada uno suma más que el anterior si encadenas rápido.</li>
             <li><b>Los muros</b> apagan la chispa.</li>
+            <li><b>No hace falta usar las cinco piezas.</b> Una basta, y una pieza de más en el camino puede costarte puntos.</li>
             <li>Tienes <b>3 intentos</b>. Cuenta el mejor.</li>
           </ul>
           <h3>Las piezas</h3>
@@ -232,6 +251,19 @@
 
           <p class="settings-foot" id="settings-foot"></p>
         </div>
+      </section>
+
+      <!-- ======================== LEADERBOARD ========================= -->
+      <section class="screen" id="screen-board" data-screen="board" hidden>
+        <header class="sub-head">
+          <button class="icon-btn" id="btn-board-back" aria-label="Volver">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M15 18l-6-6 6-6"/></svg>
+          </button>
+          <h2>Clasificación</h2>
+        </header>
+        <p class="sub-note" id="board-sub">Reto de hoy</p>
+        <div class="board-list" id="board-list"></div>
+        <button class="btn btn-ghost" id="btn-top-replay" hidden>Ver la jugada ganadora</button>
       </section>
 
       <!-- ========================== TUTORIAL ========================== -->

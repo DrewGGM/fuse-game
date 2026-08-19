@@ -338,6 +338,55 @@ describe('GET /v1/leaderboard/:date', () => {
     expect(res.body.top).toHaveLength(1);
   });
 
+  it('gives tied players the same position, matching what submit reported', async () => {
+    // The submit endpoint counts how many players are strictly above you, so
+    // ties share a rank. A board that numbered rows 1,2,3 contradicted it.
+    const board = dailyBoard(TODAY);
+    const best = solve(board, CURATION_BUDGET).best;
+    const score = runSim(board, best).score;
+
+    const ranks: number[] = [];
+    for (let i = 0; i < 3; i++) {
+      const player = await newPlayer();
+      const res = await call('POST', '/v1/runs', {
+        token: player.token,
+        body: { date: TODAY, placements: best, clientScore: score },
+      });
+      ranks.push(res.body.rank);
+    }
+    expect(ranks).toEqual([1, 1, 1]);
+
+    const board_ = await call('GET', `/v1/leaderboard/${TODAY}`);
+    expect(board_.body.top.map((e: any) => e.rank)).toEqual([1, 1, 1]);
+  });
+
+  it('skips positions after a tie', async () => {
+    const strongPlayer = await newPlayer();
+    const board = dailyBoard(TODAY);
+    const best = solve(board, CURATION_BUDGET).best;
+    const high = runSim(board, best).score;
+
+    for (let i = 0; i < 2; i++) {
+      const p = i === 0 ? strongPlayer : await newPlayer();
+      await call('POST', '/v1/runs', {
+        token: p.token,
+        body: { date: TODAY, placements: best, clientScore: high },
+      });
+    }
+
+    const weakPlayer = await newPlayer();
+    const weak = weakRun(TODAY);
+    await call('POST', '/v1/runs', {
+      token: weakPlayer.token,
+      body: { date: TODAY, placements: weak.placements, clientScore: weak.score },
+    });
+
+    const res = await call('GET', `/v1/leaderboard/${TODAY}`);
+    const ranks = res.body.top.map((e: any) => e.rank);
+    // Two tied at the top, so the third player is third — not second.
+    expect(ranks).toEqual([1, 1, 3]);
+  });
+
   it('is empty for a day nobody played', async () => {
     const res = await call('GET', '/v1/leaderboard/2026-03-03');
     expect(res.status).toBe(200);

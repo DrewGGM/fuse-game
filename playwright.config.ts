@@ -25,7 +25,7 @@ export default defineConfig({
     },
     {
       name: 'app',
-      testMatch: /(app|tutorial)\.spec\.ts/,
+      testMatch: /(app|tutorial|leaderboard)\.spec\.ts/,
       // A mid-range Android viewport, because that is the device the design targets.
       use: { ...devices['Pixel 5'] },
     },

@@ -24,6 +24,24 @@ export interface Settings {
   palette: string;
 }
 
+/** Minimal shape of the identity; the full type lives in api.ts. */
+export interface StoredIdentity {
+  readonly id: string;
+  readonly handle: string;
+  readonly token: string;
+}
+
+/** A run recorded locally and not yet acknowledged by the server. */
+export interface StoredPendingRun {
+  readonly id: string;
+  readonly date: string;
+  readonly placements: { x: number; y: number; piece: number }[];
+  readonly score: number;
+  readonly queuedAt: number;
+  attempts: number;
+  lastError?: string;
+}
+
 export interface SaveData {
   version: 1;
   results: Record<string, DayResult>;
@@ -39,6 +57,12 @@ export interface SaveData {
   rewardsUsedToday: number;
   /** True once the first-run tutorial has been seen or skipped. */
   tutorialDone: boolean;
+  /** Anonymous server identity, created on first successful contact. */
+  identity: StoredIdentity | null;
+  /** Runs waiting to reach the server. Survives a reload and a reinstall-free crash. */
+  pendingRuns: StoredPendingRun[];
+  /** Best-known rank per date, so the home card can show it offline. */
+  ranks: Record<string, { rank: number; players: number; percentile: number }>;
 }
 
 const DEFAULTS: SaveData = {
@@ -51,6 +75,9 @@ const DEFAULTS: SaveData = {
   lastRewardDate: null,
   rewardsUsedToday: 0,
   tutorialDone: false,
+  identity: null,
+  pendingRuns: [],
+  ranks: {},
 };
 
 function clone(data: SaveData): SaveData {
@@ -74,6 +101,11 @@ export function load(): SaveData {
       settings: { ...DEFAULTS.settings, ...(parsed.settings ?? {}) },
       results: parsed.results ?? {},
       unlockedPalettes: parsed.unlockedPalettes ?? [...DEFAULTS.unlockedPalettes],
+      // A save written by an older build has none of these; defaulting here
+      // rather than at every use site keeps the rest of the app from guarding.
+      pendingRuns: parsed.pendingRuns ?? [],
+      ranks: parsed.ranks ?? {},
+      identity: parsed.identity ?? null,
     };
     return cache;
   } catch {
@@ -170,6 +202,22 @@ export function consumeReward(today: string): void {
     }
     d.rewardsUsedToday++;
   });
+}
+
+/** Remembers where a run placed, so the home screen can show it without a network call. */
+export function recordRank(
+  date: string,
+  rank: number,
+  players: number,
+  percentile: number
+): void {
+  update((d) => {
+    d.ranks[date] = { rank, players, percentile };
+  });
+}
+
+export function getRank(date: string): { rank: number; players: number; percentile: number } | null {
+  return load().ranks[date] ?? null;
 }
 
 /** Test seam: drops the in-memory cache so a test can re-read storage. */

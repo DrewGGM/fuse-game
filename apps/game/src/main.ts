@@ -17,7 +17,7 @@ import {
   type Board,
   type Placement,
 } from '@fuse/sim';
-import { dailyBoard, dailyPar, puzzleNumber, utcDate } from '@fuse/gen';
+import { dailyBoard, dailyPar, dailyTarget, puzzleNumber, utcDate } from '@fuse/gen';
 import {
   BoardView,
   PALETTES,
@@ -36,14 +36,25 @@ import {
   type PurchasePort,
   type Reward,
 } from './commerce.js';
-import { shareSummary, shareText, verdict } from './share.js';
+import { recordClip, shareSummary, shareText, verdict, type ClipRecorder } from './share.js';
+import * as api from './api.js';
+import * as sync from './sync.js';
+import * as reminder from './reminder.js';
 import { Tutorial } from './tutorial.js';
 import * as store from './storage.js';
 import { formatScore } from './format.js';
 
 const MAX_ATTEMPTS = 3;
 
-type ScreenName = 'home' | 'game' | 'result' | 'archive' | 'howto' | 'settings' | 'tutorial';
+type ScreenName =
+  | 'home'
+  | 'game'
+  | 'result'
+  | 'archive'
+  | 'howto'
+  | 'settings'
+  | 'tutorial'
+  | 'board';
 
 interface Session {
   readonly date: string;
@@ -74,6 +85,7 @@ const ui = {
     howto: el('screen-howto'),
     settings: el('screen-settings'),
     tutorial: el('screen-tutorial'),
+    board: el('screen-board'),
   } as Record<ScreenName, HTMLElement>,
 
   dailyNo: el('daily-no'),
@@ -104,6 +116,16 @@ const ui = {
   resultBarFill: el('result-bar-fill'),
   resultBarMark: el('result-bar-mark'),
   resultGap: el('result-gap'),
+  rankCard: el('rank-card'),
+  rankPos: el('rank-pos'),
+  rankOf: el('rank-of'),
+  rankBoard: el('rank-board'),
+  syncNote: el('sync-note'),
+  homeSyncNote: el('home-sync-note'),
+  btnClip: el<HTMLButtonElement>('btn-clip'),
+  boardList: el('board-list'),
+  boardSub: el('board-sub'),
+  btnTopReplay: el<HTMLButtonElement>('btn-top-replay'),
   resultBestLabel: el('result-best-label'),
   resultParLabel: el('result-par-label'),
   resultShare: el('result-share'),
@@ -147,6 +169,9 @@ let palette: Palette = paletteById(store.load().settings.palette);
 let audio: AudioContext | null = null;
 let toastTimer = 0;
 let tutorial: Tutorial | null = null;
+let identity: api.Identity | null = null;
+let clipRecorder: ClipRecorder | null = null;
+let lastClip: Blob | null = null;
 
 // ---------------------------------------------------------------------------
 // Small helpers
@@ -272,8 +297,10 @@ function renderHome(): void {
   ui.metaAttempts.textContent = String(left);
   ui.metaBest.textContent = result ? formatScore(result.best) : '—';
   ui.metaStreak.textContent = String(store.currentStreak(today));
-  const par = dailyPar(today);
-  ui.metaPar.textContent = par ? formatScore(par) : '—';
+  // The home card shows the reachable target, not the record: it is the number
+  // a player can plan around.
+  const target = dailyTarget(today);
+  ui.metaPar.textContent = target ? formatScore(target) : '—';
 
   previewView.setPalette(palette);
   previewView.setBoard(board);
@@ -450,6 +477,12 @@ function launch(): void {
   ui.comboBadge.textContent = '×1';
   blip(140, 0.18, 'sawtooth', 0.06);
 
+  // The clip is the growth engine, so it is captured from the canvas as the run
+  // happens rather than reconstructed later. If the WebView cannot record, the
+  // button simply never appears — no error, no half-feature.
+  lastClip = null;
+  clipRecorder = s.ranked ? recordClip(ui.boardCanvas) : null;
+
   boardView.play(s.placements, {
     onScore: (score, multiplier) => {
       ui.scoreLive.textContent = formatScore(score);
@@ -474,8 +507,58 @@ function finishRun(s: Session, score: number, ignited: number): void {
     console.error('[fuse] render and simulation disagree', { rendered: score, authoritative });
   }
 
-  if (s.ranked) store.recordAttempt(s.date, authoritative.score, ignited, total);
+  if (s.ranked) {
+    store.recordAttempt(s.date, authoritative.score, ignited, total);
+    // Queued before any network call: the run is safe on disk whatever happens
+    // to the connection from here.
+    sync.enqueue(s.date, s.placements, authoritative.score);
+  }
+
+  void finishClip();
   setTimeout(() => renderResult(s), 520);
+}
+
+/**
+ * Hands the clip to the share sheet, falling back to a download.
+ *
+ * A WebView cannot always share a file, and the download fallback is what makes
+ * this work on desktop and in the browser build.
+ */
+async function saveClip(): Promise<void> {
+  if (!lastClip) return;
+  const name = `fuse-${puzzleNumber(session?.date ?? today)}.webm`;
+  const file = new File([lastClip], name, { type: lastClip.type || 'video/webm' });
+
+  const nav = navigator as Navigator & {
+    canShare?: (data: ShareData) => boolean;
+    share?: (data: ShareData) => Promise<void>;
+  };
+  if (nav.canShare?.({ files: [file] }) && nav.share) {
+    try {
+      await nav.share({ files: [file], text: ui.resultShare.textContent ?? '' });
+      return;
+    } catch {
+      // Dismissed or unsupported — fall through to the download.
+    }
+  }
+
+  const url = URL.createObjectURL(lastClip);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = name;
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(url), 5000);
+  toast('Clip guardado');
+}
+
+async function finishClip(): Promise<void> {
+  if (!clipRecorder) return;
+  const recorder = clipRecorder;
+  clipRecorder = null;
+  // Let the last frames of the chain land before cutting.
+  await new Promise((r) => setTimeout(r, 400));
+  lastClip = await recorder.stop();
+  ui.btnClip.hidden = lastClip === null;
 }
 
 // ---------------------------------------------------------------------------
@@ -488,7 +571,8 @@ function renderResult(s: Session): void {
 
   const stored = s.ranked ? store.getResult(s.date) : null;
   const best = stored?.best ?? r.score;
-  const par = dailyPar(s.date);
+  const target = dailyTarget(s.date);
+  const record = dailyPar(s.date);
 
   ui.resultLabel.textContent = s.ranked ? `Reto #${puzzleNumber(s.date)}` : 'Práctica';
   ui.resultScore.textContent = formatScore(r.score);
@@ -497,7 +581,7 @@ function renderResult(s: Session): void {
   // more in there" on a run that had just matched the target.
   ui.resultDetail.textContent = `${r.ignited} de ${r.total} nodos encendidos`;
 
-  renderTargetBar(r.score, best, par, verdict(r.score, r.ignited, r.total));
+  renderTargetBar(r.score, best, target, record, verdict(r.score, r.ignited, r.total));
 
   const left = s.ranked ? store.attemptsLeft(s.date, MAX_ATTEMPTS) : Infinity;
   ui.btnRetry.hidden = left <= 0;
@@ -516,8 +600,16 @@ function renderResult(s: Session): void {
   ui.btnShare.hidden = !s.ranked;
 
   renderOffers(s);
+  ui.btnClip.hidden = lastClip === null;
   show('result');
   blip(520, 0.12, 'sine', 0.05);
+
+  // Fire-and-forget: the result screen is already complete without it.
+  if (s.ranked) void syncAndShowRank(s.date);
+  else {
+    ui.rankCard.hidden = true;
+    ui.syncNote.hidden = true;
+  }
 }
 
 /**
@@ -528,8 +620,14 @@ function renderResult(s: Session): void {
  * a puzzle with a hidden answer. Par is the best the reference solver found, not
  * a proven maximum, and the copy says so when you beat it.
  */
-function renderTargetBar(score: number, best: number, par: number | null, verdictText = ''): void {
-  const ceiling = Math.max(par ?? 0, best, score, 1);
+function renderTargetBar(
+  score: number,
+  best: number,
+  target: number | null,
+  record: number | null,
+  verdictText = ''
+): void {
+  const ceiling = Math.max(record ?? 0, target ?? 0, best, score, 1);
 
   ui.resultBarFill.style.width = '0%';
   requestAnimationFrame(() => {
@@ -538,8 +636,7 @@ function renderTargetBar(score: number, best: number, par: number | null, verdic
 
   ui.resultBestLabel.textContent = `Tu mejor: ${formatScore(best)}`;
 
-  if (par === null) {
-    // No target for this day: fall back to a plain read of how it went.
+  if (target === null) {
     ui.resultBarMark.hidden = true;
     ui.resultParLabel.textContent = '';
     ui.resultGap.textContent = verdictText;
@@ -547,20 +644,162 @@ function renderTargetBar(score: number, best: number, par: number | null, verdic
     return;
   }
 
+  // The notch marks the reachable target. The record is named in the copy but
+  // deliberately not drawn as a second goalpost — one thing to aim at.
   ui.resultBarMark.hidden = false;
-  ui.resultBarMark.style.left = `${Math.round((par / ceiling) * 100)}%`;
-  ui.resultParLabel.textContent = `Objetivo: ${formatScore(par)}`;
+  ui.resultBarMark.style.left = `${Math.round((target / ceiling) * 100)}%`;
+  ui.resultParLabel.textContent = `Objetivo: ${formatScore(target)}`;
 
-  if (score > par) {
-    ui.resultGap.textContent = 'Has batido el mejor resultado conocido.';
+  if (record !== null && score >= record) {
+    ui.resultGap.textContent = 'Has igualado el mejor resultado conocido.';
     ui.resultGap.dataset.tone = 'good';
-  } else if (score === par) {
-    ui.resultGap.textContent = 'Has igualado el objetivo. Nadie lo ha hecho mejor.';
+  } else if (score >= target) {
+    const toRecord = record !== null ? ` El récord está en ${formatScore(record)}.` : '';
+    ui.resultGap.textContent = `Objetivo superado.${toRecord}`;
     ui.resultGap.dataset.tone = 'good';
   } else {
-    ui.resultGap.textContent = `Te faltan ${formatScore(par - score)} para el objetivo.`;
+    ui.resultGap.textContent = `Te faltan ${formatScore(target - score)} para el objetivo.`;
     ui.resultGap.dataset.tone = 'normal';
   }
+}
+
+/**
+ * Sends the queued run and shows where it placed.
+ *
+ * Runs after the result screen is already on-screen: the score, the target and
+ * the share text are all local, so none of them wait for the network. The rank
+ * arrives late and slots in, or never arrives and nothing looks broken.
+ */
+async function syncAndShowRank(date: string): Promise<void> {
+  ui.rankCard.hidden = true;
+  ui.syncNote.hidden = true;
+
+  const cached = store.getRank(date);
+  if (cached) showRank(cached.rank, cached.players, cached.percentile);
+
+  identity ??= await sync.ensureIdentity();
+  if (!identity) {
+    showSyncNote(ui.syncNote, `Sin conexión · ${sync.pendingCount()} por enviar`);
+    return;
+  }
+
+  const outcome = await sync.flushAll(identity);
+  if (outcome.status === 'sent') {
+    store.recordRank(date, outcome.result.rank, outcome.result.players, outcome.result.percentile);
+    showRank(outcome.result.rank, outcome.result.players, outcome.result.percentile);
+    void loadLeaderboardPeek(date);
+  } else if (outcome.status === 'offline') {
+    showSyncNote(ui.syncNote, `Sin conexión · ${outcome.pendingLeft} por enviar`);
+  } else if (outcome.status === 'rejected') {
+    // The server refused it. Say so plainly rather than pretending it counted.
+    showSyncNote(ui.syncNote, rejectionMessage(outcome.code));
+  }
+}
+
+function rejectionMessage(code: string): string {
+  if (code === 'ATTEMPTS_EXHAUSTED') return 'Ya habías gastado los intentos de hoy en el servidor.';
+  if (code === 'DATE_NOT_TODAY') return 'Este reto ya cerró; la puntuación no entra en la clasificación.';
+  if (code === 'SCORE_MISMATCH') return 'El servidor no pudo verificar la puntuación.';
+  return 'La puntuación no entró en la clasificación.';
+}
+
+function showRank(rank: number, players: number, percentile: number): void {
+  ui.rankCard.hidden = false;
+  ui.rankPos.textContent = `#${formatScore(rank)}`;
+  ui.rankOf.textContent =
+    players > 1
+      ? `de ${formatScore(players)} · mejor que el ${percentile}%`
+      : 'primero en jugar hoy';
+}
+
+function showSyncNote(node: HTMLElement, text: string): void {
+  node.textContent = text;
+  node.hidden = false;
+}
+
+/** Top three, shown inline so the rank has context without a second screen. */
+async function loadLeaderboardPeek(date: string): Promise<void> {
+  const board = await api.fetchLeaderboard(date);
+  if (!board.ok) return;
+
+  ui.rankBoard.replaceChildren();
+  for (const entry of board.data.top.slice(0, 3)) {
+    const row = make('div', 'rank-row');
+    row.append(
+      make('span', 'rank-row-pos', `${entry.rank}`),
+      make('span', 'rank-row-handle', entry.handle),
+      make('span', 'rank-row-score', formatScore(entry.score))
+    );
+    ui.rankBoard.append(row);
+  }
+}
+
+async function renderLeaderboard(date: string): Promise<void> {
+  ui.boardSub.textContent = `Reto #${puzzleNumber(date)}`;
+  ui.boardList.replaceChildren();
+  ui.boardList.append(make('p', 'board-empty', 'Cargando…'));
+  show('board');
+
+  const board = await api.fetchLeaderboard(date);
+  ui.boardList.replaceChildren();
+
+  if (!board.ok) {
+    ui.boardList.append(
+      make('p', 'board-empty', 'No se pudo cargar la clasificación. Inténtalo más tarde.')
+    );
+    return;
+  }
+  if (board.data.top.length === 0) {
+    ui.boardList.append(make('p', 'board-empty', 'Todavía no ha jugado nadie hoy.'));
+    return;
+  }
+
+  const mine = store.getRank(date);
+  for (const entry of board.data.top) {
+    const row = make('div', 'board-row');
+    // Highlighting the player's own row is the only reason the client needs to
+    // know its own handle at all.
+    if (identity && entry.handle === identity.handle) row.classList.add('is-me');
+    row.append(
+      make('span', 'board-pos', `${entry.rank}`),
+      make('span', 'board-handle', entry.handle),
+      make('span', 'board-score', formatScore(entry.score))
+    );
+    ui.boardList.append(row);
+  }
+
+  if (mine && !board.data.top.some((e) => identity && e.handle === identity.handle)) {
+    const row = make('div', 'board-row is-me');
+    row.append(
+      make('span', 'board-pos', `${mine.rank}`),
+      make('span', 'board-handle', 'Tú'),
+      make('span', 'board-score', formatScore(store.getResult(date)?.best ?? 0))
+    );
+    ui.boardList.append(row);
+  }
+
+  // The winning run is only released once the day has closed.
+  ui.btnTopReplay.hidden = date >= utcDate();
+  ui.btnTopReplay.dataset.date = date;
+}
+
+/** Replays the winning run of a closed day on the real board. */
+async function showTopReplay(date: string): Promise<void> {
+  const replay = await api.fetchTopReplay(date);
+  if (!replay.ok) {
+    toast(replay.kind === 'rejected' ? 'Todavía no se puede ver' : 'No se pudo cargar');
+    return;
+  }
+
+  startSession(date, false);
+  setTimeout(() => {
+    if (!session) return;
+    session.placements = replay.data.placements;
+    boardView.setPlacements(session.placements);
+    syncControls();
+    toast(`La jugada de ${replay.data.handle} · ${formatScore(replay.data.score)}`);
+    launch();
+  }, 350);
 }
 
 function renderOffers(s: Session): void {
@@ -671,6 +910,13 @@ function renderPieceGuide(): void {
 function renderSettings(): void {
   const data = store.load();
   ui.setReminder.checked = data.settings.reminder;
+  ui.setReminder.disabled = !reminder.isSupported();
+  const reminderNote = ui.setReminder.closest('.setting')?.querySelector('small');
+  if (reminderNote) {
+    reminderNote.textContent = reminder.isSupported()
+      ? 'Un aviso cuando hay tablero nuevo. Desactivado hasta que lo pidas.'
+      : 'Solo disponible en la app instalada.';
+  }
   ui.setSound.checked = data.settings.sound;
   ui.setReduced.checked = data.settings.reducedMotion;
 
@@ -797,6 +1043,16 @@ function bindHome(): void {
   });
   el('btn-archive-back').addEventListener('click', () => show('home'));
 
+  el('btn-board-back').addEventListener('click', () => {
+    // Back from the leaderboard returns to wherever it was opened from.
+    show(session?.lastResult ? 'result' : 'home');
+  });
+
+  ui.btnTopReplay.addEventListener('click', () => {
+    const date = ui.btnTopReplay.dataset.date;
+    if (date) void showTopReplay(date);
+  });
+
   el('btn-howto').addEventListener('click', () => {
     renderPieceGuide();
     show('howto');
@@ -847,6 +1103,12 @@ function bindResult(): void {
 
   el('btn-result-home').addEventListener('click', goHome);
 
+  el('btn-full-board').addEventListener('click', () => {
+    void renderLeaderboard(session?.date ?? today);
+  });
+
+  ui.btnClip.addEventListener('click', () => void saveClip());
+
   ui.btnShare.addEventListener('click', () => {
     void (async () => {
       const outcome = await shareSummary(ui.resultShare.textContent ?? '');
@@ -868,10 +1130,31 @@ function bindSettings(): void {
   el('btn-replay-tutorial').addEventListener('click', startTutorial);
 
   ui.setReminder.addEventListener('change', () => {
-    store.update((d) => {
-      d.settings.reminder = ui.setReminder.checked;
-    });
-    toast(ui.setReminder.checked ? 'Te avisaremos del tablero nuevo' : 'Recordatorio desactivado');
+    void (async () => {
+      const wanted = ui.setReminder.checked;
+      if (!wanted) {
+        await reminder.disable();
+        store.update((d) => {
+          d.settings.reminder = false;
+        });
+        toast('Recordatorio desactivado');
+        return;
+      }
+
+      // The switch only stays on if a notification was really scheduled.
+      // Reflecting a permission denial back into the UI is the whole point:
+      // the previous version claimed success unconditionally.
+      const outcome = await reminder.enable();
+      const on = outcome === 'scheduled';
+      ui.setReminder.checked = on;
+      store.update((d) => {
+        d.settings.reminder = on;
+      });
+
+      if (outcome === 'scheduled') toast('Te avisaremos cuando haya tablero nuevo');
+      else if (outcome === 'denied') toast('Android bloqueó las notificaciones para Fuse');
+      else toast('Los recordatorios solo funcionan en la app instalada');
+    })();
   });
 
   ui.setSound.addEventListener('change', () =>
@@ -888,10 +1171,41 @@ function bindSettings(): void {
   });
 }
 
+/**
+ * Drains the queue in the background and updates the home hint.
+ *
+ * Silent by design: nobody wants a toast every time a network came back.
+ */
+async function flushQueueQuietly(): Promise<void> {
+  if (sync.pendingCount() === 0) {
+    ui.homeSyncNote.hidden = true;
+    return;
+  }
+  identity ??= await sync.ensureIdentity();
+  const outcome = await sync.flushAll(identity);
+  const left = sync.pendingCount();
+
+  if (left === 0) {
+    ui.homeSyncNote.hidden = true;
+    if (outcome.status === 'sent') {
+      store.recordRank(
+        outcome.result ? today : today,
+        outcome.result.rank,
+        outcome.result.players,
+        outcome.result.percentile
+      );
+      renderHome();
+    }
+    return;
+  }
+  showSyncNote(ui.homeSyncNote, `${left} resultado${left === 1 ? '' : 's'} por enviar`);
+}
+
 function goHome(): void {
   boardView.reset();
   renderHome();
   show('home');
+  void flushQueueQuietly();
 }
 
 function bind(): void {
@@ -900,6 +1214,9 @@ function bind(): void {
   bindResult();
   bindSettings();
   bindTutorial();
+
+  // A player who finishes a run underground gets it counted when they surface.
+  window.addEventListener('online', () => void flushQueueQuietly());
 
   window.addEventListener('resize', () => {
     boardView.resize();
@@ -921,6 +1238,10 @@ function boot(): void {
   }
   bind();
   renderHome();
+
+  // Android drops scheduled notifications on force-stop, so a reminder that was
+  // on can quietly stop firing. Re-arming on boot is idempotent.
+  void reminder.restore(data.settings.reminder);
 
   if (!data.tutorialDone) startTutorial();
   else show('home');
@@ -948,7 +1269,10 @@ window.__fuse = {
   onBoardTap,
   launch,
   dailyPar,
+  dailyTarget,
   store,
+  sync,
+  api,
   utcDate,
   dailyBoard,
   MAX_ATTEMPTS,

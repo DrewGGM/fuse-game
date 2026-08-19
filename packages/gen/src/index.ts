@@ -29,6 +29,7 @@ import {
 } from '@fuse/sim';
 import CURATED_SEEDS from './seeds.json' with { type: 'json' };
 import CURATED_PARS from './pars.json' with { type: 'json' };
+import CURATED_TARGETS from './targets.json' with { type: 'json' };
 
 // ---------------------------------------------------------------------------
 // Board shape and tuning
@@ -401,6 +402,21 @@ export function dailyPar(date: string): number | null {
   const n = puzzleNumber(date);
   if (n < 1 || n > CURATED_PARS.length) return null;
   return CURATED_PARS[n - 1];
+}
+
+/**
+ * A score a thinking player can actually reach, unlike {@link dailyPar}.
+ *
+ * Simulating a population showed the solver's best is out of reach for almost
+ * everyone — the median player got 31% of it and nobody matched it — so showing
+ * only that number told nearly every player, every day, that they had fallen
+ * short. This is measured with a sampling-only budget calibrated against what a
+ * "thoughtful" simulated player achieves, and lands near 44% of the record.
+ */
+export function dailyTarget(date: string): number | null {
+  const n = puzzleNumber(date);
+  if (n < 1 || n > CURATED_TARGETS.length) return null;
+  return CURATED_TARGETS[n - 1];
 }
 
 // ---------------------------------------------------------------------------

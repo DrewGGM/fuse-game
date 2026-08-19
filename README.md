@@ -18,9 +18,15 @@ what the best known score is so the number means something.
   ●  ●  ●  ●  ○      ← unlit nodes stay cold
 ```
 
-**Status:** playable end to end on web and Android. Ads and in-app purchases run
-against development adapters; the native SDKs are wired behind ports and need
-live accounts before release.
+**Status:** feature complete. The daily board, the shared leaderboard, the
+offline queue, clip export, the tutorial and the reminder all work; the release
+AAB builds signed and minified at 2.5 MB. What remains is provisioning —
+a Cloudflare account, a signing key and a Play listing — all of it in
+[docs/release.md](docs/release.md).
+
+Ads and purchases still run against development adapters. That is deliberate:
+the game is complete without them, so the sensible order is publish, see whether
+anyone plays, then monetise.
 
 ---
 
@@ -70,6 +76,26 @@ npm run dev          # the game at http://localhost:5173
 npm test             # unit + integration
 npm run ci           # everything CI runs, minus the browser suites
 ```
+
+### Running the whole thing locally
+
+The client works with no server at all — that is the point of deriving the board
+on the device — but the leaderboard needs one:
+
+```bash
+cd apps/api
+npx wrangler d1 migrations apply fuse-db --local
+npx wrangler dev                       # http://localhost:8787
+
+# in another shell, build the client against it
+FUSE_API_BASE=http://localhost:8787 npm run build --workspace=@fuse/game
+npm run preview --workspace=@fuse/game
+```
+
+`FUSE_API_BASE` sets both the API the client calls and the CSP's `connect-src`.
+Building without it points at production, and the local Worker is then refused
+by the policy — which is correct behaviour, and confusing for ten minutes if you
+do not know it.
 
 Browser suites need Chromium once:
 
@@ -128,6 +154,26 @@ To check that every shipped board really is playable:
 npm run verify:seeds        # all 800: a scoring solution exists and replays
 ```
 
+### Two numbers, not one
+
+`pars.json` holds the **record** — the best the reference solver can find.
+`targets.json` holds a **reachable target**, measured with a sampling-only budget
+calibrated against simulated players.
+
+Both exist because of what the population simulation showed: the record is
+reached by essentially nobody. The median player got 31% of it and not one of
+forty matched it, so a single number labelled "objetivo" told almost every
+player, every day, that they had fallen short. The target is hit by 38% of
+simulated players — 7% of those playing blind, 82% of those thinking about it.
+
+```bash
+npm run simulate -- 60      # 60 players of mixed skill against a local Worker
+```
+
+That script is the closest thing to a playtest that can be run on demand: it
+drives real HTTP, so a scoring bug, a broken attempt limit or a leaderboard that
+disagrees with itself shows up as a rejection rather than a plausible number.
+
 ### A note on the rules
 
 A run may use **one to five** pieces. Requiring all five implied there was an
@@ -177,6 +223,7 @@ The reasoning, including the evidence that cuts against it, is in
 | [006](docs/adr/006-player-friendly-monetisation.md) | Rewarded opt-in only, no interstitials |
 | [007](docs/adr/007-canvas-over-game-framework.md) | Canvas 2D instead of a game framework |
 | [008](docs/adr/008-optional-pieces-and-a-visible-target.md) | Pieces are optional; the target is shown |
+| [009](docs/adr/009-offline-first-leaderboard.md) | The leaderboard is optional to the game |
 
 ---
 

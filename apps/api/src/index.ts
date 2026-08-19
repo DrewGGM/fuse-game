@@ -217,10 +217,25 @@ async function getLeaderboard(dateParam: string, url: URL, env: Env): Promise<Re
     .bind(date, limit)
     .all<{ handle: string; score: number }>();
 
+  // Competition ranking: everyone on the same score shares a position, and the
+  // next distinct score skips ahead. Numbering rows sequentially instead made
+  // the board disagree with the rank a submission was told it earned — two
+  // players tied on 7200 were shown as first and second.
+  let rank = 0;
+  let seen = 0;
+  let previousScore: number | null = null;
+
   return json({
     date,
     puzzle: puzzleNumber(date),
-    top: (rows.results ?? []).map((row, i) => ({ rank: i + 1, handle: row.handle, score: row.score })),
+    top: (rows.results ?? []).map((row) => {
+      seen++;
+      if (row.score !== previousScore) {
+        rank = seen;
+        previousScore = row.score;
+      }
+      return { rank, handle: row.handle, score: row.score };
+    }),
   });
 }
 

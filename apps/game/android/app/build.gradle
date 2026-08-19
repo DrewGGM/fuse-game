@@ -7,8 +7,11 @@ android {
         applicationId "gg.fuse.daily"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        // Play rejects an upload whose versionCode is not higher than the last.
+        // Read from an env var so a release can be cut without editing a file:
+        //   FUSE_VERSION_CODE=2 FUSE_VERSION_NAME=0.2.3 ./gradlew bundleRelease
+        versionCode(System.getenv("FUSE_VERSION_CODE") ? System.getenv("FUSE_VERSION_CODE").toInteger() : 1)
+        versionName(System.getenv("FUSE_VERSION_NAME") ?: "0.2.2")
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
@@ -16,11 +19,44 @@ android {
             ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
         }
     }
+    /*
+     * Signing.
+     *
+     * Configured entirely from the environment so the keystore and its passwords
+     * never enter the repository, and a release can be built in CI without a
+     * human editing a tracked file:
+     *
+     *   FUSE_KEYSTORE=/path/upload.jks FUSE_KEYSTORE_PASSWORD=...      *   FUSE_KEY_ALIAS=upload FUSE_KEY_PASSWORD=... ./gradlew bundleRelease
+     *
+     * With no keystore set the release build is simply unsigned, which is what
+     * a plain CI verification build wants.
+     */
+    signingConfigs {
+        release {
+            def keystorePath = System.getenv("FUSE_KEYSTORE")
+            if (keystorePath) {
+                storeFile file(keystorePath)
+                storePassword System.getenv("FUSE_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("FUSE_KEY_ALIAS")
+                keyPassword System.getenv("FUSE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
-            minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            // Shrinks the AndroidX and Capacitor runtime, which is the bulk of
+            // the download: the game itself is well under 100 KB.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            signingConfig System.getenv("FUSE_KEYSTORE") ? signingConfigs.release : null
         }
+    }
+
+    /* Reproducible-ish builds: keep the AAB stable across machines. */
+    packagingOptions {
+        jniLibs { useLegacyPackaging false }
     }
 }
 

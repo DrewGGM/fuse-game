@@ -39,6 +39,9 @@ const codeOf = (rel: string): string =>
 
 const CLIENT_SOURCES = [
   '../src/main.ts',
+  '../src/api.ts',
+  '../src/sync.ts',
+  '../src/reminder.ts',
   '../src/board-view.ts',
   '../src/tutorial.ts',
   '../src/storage.ts',
@@ -192,10 +195,13 @@ describe('supply chain', () => {
   it('keeps the client free of network-fetching dependencies', () => {
     const pkg = JSON.parse(read('../package.json'));
     const deps = Object.keys(pkg.dependencies ?? {});
-    // Every asset is bundled; nothing should be reaching out at runtime.
+    // Every asset is bundled; the only runtime dependencies are the native
+    // bridge, the notification plugin, the self-hosted font and our own code.
+    // This list is asserted exactly so that adding anything is a decision.
     expect(deps.sort()).toEqual([
       '@capacitor/android',
       '@capacitor/core',
+      '@capacitor/local-notifications',
       '@fontsource/chakra-petch',
       '@fuse/gen',
       '@fuse/sim',

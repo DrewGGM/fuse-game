@@ -1,21 +1,26 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
+# Fuse — ProGuard/R8 rules.
 #
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
+# The game is JavaScript inside a WebView; the only Java is Capacitor's bridge.
+# R8 must not strip what the bridge reaches by reflection, or the app builds
+# fine and then shows a blank screen on launch — the worst possible failure,
+# because it only appears in a release build.
 
-# If your project uses WebView with JS, uncomment the following
-# and specify the fully qualified class name to the JavaScript interface
-# class:
-#-keepclassmembers class fqcn.of.javascript.interface.for.webview {
-#   public *;
-#}
+# Capacitor discovers plugins and their @PluginMethod entry points reflectively.
+-keep class com.getcapacitor.** { *; }
+-keep @com.getcapacitor.annotation.CapacitorPlugin class * { *; }
+-keepclassmembers class * {
+  @com.getcapacitor.PluginMethod public <methods>;
+}
 
-# Uncomment this to preserve the line number information for
-# debugging stack traces.
-#-keepattributes SourceFile,LineNumberTable
+# The local-notifications plugin is resolved by name from the JS side.
+-keep class com.capacitorjs.plugins.** { *; }
 
-# If you keep the line number information, uncomment this to
-# hide the original source file name.
-#-renamesourcefileattribute SourceFile
+# Anything the WebView calls through addJavascriptInterface.
+-keepclassmembers class * {
+  @android.webkit.JavascriptInterface <methods>;
+}
+
+# Keep source line numbers so a crash report is readable, but hide the original
+# file names.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile

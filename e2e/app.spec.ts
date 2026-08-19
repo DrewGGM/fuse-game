@@ -350,11 +350,19 @@ test.describe('robustness', () => {
   });
 
   test('logs no console errors during a full run', async ({ page }) => {
+    // The API is unreachable in this suite, and a browser always logs a failed
+    // request. That is the network refusing, not the app misbehaving, so it is
+    // filtered explicitly — and the assertion below proves the app absorbed it.
+    const NETWORK = /ERR_NAME_NOT_RESOLVED|ERR_CONNECTION|Failed to load resource|Failed to fetch/i;
     const errors: string[] = [];
     page.on('console', (m) => {
-      if (m.type() === 'error' && !m.text().includes('favicon')) errors.push(m.text());
+      const text = m.text();
+      if (m.type() !== 'error') return;
+      if (text.includes('favicon') || NETWORK.test(text)) return;
+      errors.push(text);
     });
-    page.on('pageerror', (e) => errors.push(e.message));
+    // An uncaught exception is never acceptable, network or not.
+    page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`));
 
     await page.locator('#btn-play').click();
     await fillBoard(page);
@@ -363,13 +371,36 @@ test.describe('robustness', () => {
 
     expect(errors).toEqual([]);
   });
+
+  test('a dead API never leaks an exception into the page', async ({ page }) => {
+    const crashes: string[] = [];
+    page.on('pageerror', (e) => crashes.push(e.message));
+
+    await page.locator('#btn-play').click();
+    await fillBoard(page);
+    await page.locator('#btn-launch').click();
+    await expect(page.locator('#screen-result')).toBeVisible({ timeout: 20_000 });
+    // Give the failing submission time to reject and be handled.
+    await page.waitForTimeout(2000);
+
+    expect(crashes).toEqual([]);
+    // And the run is not lost: it is waiting to be sent.
+    expect(await page.evaluate(() => (window as any).__fuse.sync.pendingCount())).toBe(1);
+  });
 });
 
 test.describe('the daily target', () => {
   test('is shown on the home screen', async ({ page }) => {
-    const par = await page.evaluate(() => (window as any).__fuse.dailyPar((window as any).__fuse.utcDate()));
-    expect(par).toBeGreaterThan(0);
-    await expect(page.locator('#meta-par')).toHaveText(par.toLocaleString('es'));
+    // The home card shows the reachable target, not the record: a number that
+    // nearly nobody reaches is not something to plan a run around.
+    const { target, record } = await page.evaluate(() => {
+      const f = (window as any).__fuse;
+      const date = f.utcDate();
+      return { target: f.dailyTarget(date), record: f.dailyPar(date) };
+    });
+    expect(target).toBeGreaterThan(0);
+    expect(target).toBeLessThanOrEqual(record);
+    await expect(page.locator('#meta-par')).toHaveText(target.toLocaleString('es-ES'));
   });
 
   test('turns a bare score into a distance', async ({ page }) => {
@@ -389,14 +420,16 @@ test.describe('the daily target', () => {
     await expect(page.locator('#result-detail')).not.toContainText('más ahí dentro');
   });
 
-  test('does not claim you beat a target you only matched', async ({ page }) => {
-    const outcome = await page.evaluate(() => {
+  test('separates the reachable target from the record', async ({ page }) => {
+    const { target, record } = await page.evaluate(() => {
       const f = (window as any).__fuse;
       const date = f.utcDate();
-      return { par: f.dailyPar(date) };
+      return { target: f.dailyTarget(date), record: f.dailyPar(date) };
     });
-    expect(outcome.par).toBeGreaterThan(0);
-    // Guarded at the unit level too; here we only assert the wording exists.
+    // Simulating a population of players showed the record is reached by
+    // essentially nobody, so the two numbers must not be the same thing.
+    expect(target).toBeGreaterThan(0);
+    expect(record).toBeGreaterThanOrEqual(target);
     await expect(page.locator('#meta-par')).not.toHaveText('—');
   });
 });

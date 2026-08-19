@@ -30,3 +30,10 @@ apps/game/android/capacitor-cordova-android-plugins/
 .env.local
 fuse-*.png
 midrun.txt
+
+# Local-only: disposable test keystore and anything else machine-specific.
+# The real upload key must NEVER live in the repository.
+.local/
+
+# wrangler dev scratch
+apps/api/.wrangler/

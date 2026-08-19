@@ -1,7 +1,7 @@
 {
   "name": "fuse",
   "private": true,
-  "version": "0.2.0",
+  "version": "0.2.2",
   "description": "Fuse — a daily chain-reaction puzzle. Same board, same five pieces, one spark.",
   "type": "module",
   "workspaces": [
@@ -32,7 +32,9 @@
     "verify:seeds": "tsx --tsconfig tsconfig.json scripts/verify-all-seeds.ts",
     "audit": "npm audit --omit=dev --audit-level=moderate",
     "csp:check": "node scripts/csp-check.mjs",
-    "android:harden": "node scripts/harden-android.mjs"
+    "android:harden": "node scripts/harden-android.mjs",
+    "simulate": "tsx --tsconfig tsconfig.json scripts/simulate-players.ts",
+    "api:dev": "cd apps/api && npx wrangler dev"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",
@@ -47,6 +49,7 @@
     "typescript": "^5.7.0",
     "typescript-eslint": "^8.67.0",
     "vite": "^6.0.0",
-    "vitest": "^3.0.0"
+    "vitest": "^3.0.0",
+    "wrangler": "^4.124.0"
   }
 }
