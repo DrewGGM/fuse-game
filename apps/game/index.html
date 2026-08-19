@@ -6,6 +6,31 @@
       name="viewport"
       content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no"
     />
+    <!--
+      Content Security Policy.
+
+      The game ships every asset it uses and talks to nothing at runtime, so the
+      policy is close to maximal: no remote script, no inline script, no plugins.
+      This is defence in depth rather than a fix for a known hole — if a future
+      dependency or a compromised build ever tried to phone home, the WebView
+      refuses instead of complying.
+
+      Written on one line per directive with no wrapping. An earlier version was
+      indented across lines, and the browser parsed the continuation as extra
+      sources of the previous directive: object-src silently became
+      "'none' base-uri 'none' form-action ..." and, because 'none' must stand
+      alone, was ignored entirely. A policy that looks stricter than it is, is
+      worse than none.
+
+      'unsafe-inline' is allowed for styles only: Capacitor and the canvas set
+      inline style attributes, and style-src-attr is not reliable across the
+      Android WebView versions this targets.
+
+      frame-ancestors is absent on purpose — it is ignored in a <meta> tag and
+      only works as a response header. The app is not framed (it loads from
+      the local scheme), and the API sets X-Frame-Options itself.
+    -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; media-src 'self' blob:; connect-src 'self' https://fuse-api.workers.dev; base-uri 'none'; form-action 'none'; object-src 'none'" />
     <meta name="theme-color" content="#070B0D" />
     <meta name="description" content="Fuse — un reto de reacción en cadena al día. El mismo tablero para todo el mundo." />
     <title>Fuse</title>

@@ -238,6 +238,26 @@ function blip(freq: number, duration = 0.06, type: OscillatorType = 'sine', gain
   }
 }
 
+/**
+ * Builds an element with text content, never markup.
+ *
+ * Replaces a handful of innerHTML template literals. None of them were
+ * exploitable — every value went in through textContent afterwards — but the
+ * pattern invites the mistake: the day someone interpolates a server-supplied
+ * handle into one of those templates, it becomes stored XSS. There is no
+ * innerHTML left in the client for that mistake to happen in.
+ */
+function make<K extends keyof HTMLElementTagNameMap>(
+  tag: K,
+  className?: string,
+  text?: string
+): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  if (className) node.className = className;
+  if (text !== undefined) node.textContent = text;
+  return node;
+}
+
 // ---------------------------------------------------------------------------
 // Home
 // ---------------------------------------------------------------------------
@@ -561,9 +581,9 @@ function addOffer(icon: string, title: string, sub: string, reward: Reward): voi
   const btn = document.createElement('button');
   btn.className = 'offer';
   btn.type = 'button';
-  btn.innerHTML = `<span class="offer-icon">${icon}</span><span class="offer-text"><b></b><small></small></span>`;
-  btn.querySelector('b')!.textContent = title;
-  btn.querySelector('small')!.textContent = sub;
+  const text = make('span', 'offer-text');
+  text.append(make('b', undefined, title), make('small', undefined, sub));
+  btn.append(make('span', 'offer-icon', icon), text);
   btn.addEventListener('click', () => void claimReward(reward, btn));
   ui.offers.append(btn);
 }
@@ -611,15 +631,20 @@ function renderArchive(): void {
     const row = document.createElement('button');
     row.className = 'archive-row';
     row.type = 'button';
-    row.innerHTML =
-      `<span class="archive-no">#${puzzleNumber(date)}</span>` +
-      `<span class="archive-date"></span>` +
-      `<span class="archive-score ${result ? '' : 'empty'}"></span>`;
-    row.querySelector('.archive-date')!.textContent = new Date(`${date}T00:00:00Z`).toLocaleDateString(
-      'es',
-      { day: 'numeric', month: 'short', timeZone: 'UTC' }
+    const label = new Date(`${date}T00:00:00Z`).toLocaleDateString('es', {
+      day: 'numeric',
+      month: 'short',
+      timeZone: 'UTC',
+    });
+    row.append(
+      make('span', 'archive-no', `#${puzzleNumber(date)}`),
+      make('span', 'archive-date', label),
+      make(
+        'span',
+        `archive-score${result ? '' : ' empty'}`,
+        result ? formatScore(result.best) : 'sin jugar'
+      )
     );
-    row.querySelector('.archive-score')!.textContent = result ? formatScore(result.best) : 'sin jugar';
     row.addEventListener('click', () => startSession(date, false));
     ui.archiveList.append(row);
   }
@@ -635,11 +660,9 @@ function renderPieceGuide(): void {
     c.height = 92;
     const ctx = c.getContext('2d');
     if (ctx) drawPieceGlyph(ctx, piece, 46, 46, 54, '#d6e6ea');
-    const text = document.createElement('div');
     const info = PIECE_NAMES[piece];
-    text.innerHTML = '<b></b><small></small>';
-    text.querySelector('b')!.textContent = info.name;
-    text.querySelector('small')!.textContent = info.blurb;
+    const text = make('div');
+    text.append(make('b', undefined, info.name), make('small', undefined, info.blurb));
     row.append(c, text);
     ui.pieceGuide.append(row);
   }
@@ -720,9 +743,12 @@ async function renderSupport(): Promise<void> {
     btn.className = 'offer';
     btn.type = 'button';
     const owned = data.adFree && product.id === 'ad_free';
-    btn.innerHTML = `<span class="offer-icon">◆</span><span class="offer-text"><b></b><small></small></span>`;
-    btn.querySelector('b')!.textContent = productTitle(product);
-    btn.querySelector('small')!.textContent = owned ? 'Ya lo tienes. Gracias.' : product.priceLabel;
+    const text = make('span', 'offer-text');
+    text.append(
+      make('b', undefined, productTitle(product)),
+      make('small', undefined, owned ? 'Ya lo tienes. Gracias.' : product.priceLabel)
+    );
+    btn.append(make('span', 'offer-icon', '◆'), text);
     btn.disabled = owned;
     btn.addEventListener('click', () => void buy(product));
     ui.support.append(btn);

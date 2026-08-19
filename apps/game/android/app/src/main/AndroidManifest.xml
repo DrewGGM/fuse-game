@@ -1,7 +1,17 @@
 <?xml version="1.0" encoding="utf-8" ?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!--
+      allowBackup is off: the save file holds a streak, purchases state and an
+      anonymous id, and with backup enabled any of it can be pulled off an
+      unrooted device over ADB, or restored onto another one. There is nothing
+      here worth syncing, so the safer default wins.
+
+      dataExtractionRules covers the same ground on Android 12+.
+    -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="false"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

@@ -180,6 +180,26 @@ The reasoning, including the evidence that cuts against it, is in
 
 ---
 
+## Security
+
+Audited 19 August 2026: nine issues found and fixed, none exploitable in the
+shipped build. Production dependencies carry **zero advisories**; the remaining
+nine are build tooling that never reaches a device.
+
+The adversarial suite runs the real Worker against real SQLite and tries to
+forge scores, smuggle pieces, reset the attempt budget, inject SQL, pollute
+prototypes and leak internals. `apps/game/test/hardening.test.ts` locks the
+client and Android posture in place, because regenerating the Capacitor project
+silently reverts the manifest.
+
+```bash
+npm run audit        # production dependencies; fails on moderate and above
+npm run csp:check    # loads the built app in a clean browser
+```
+
+Full report, including what was accepted rather than fixed and the pre-launch
+checklist: [docs/security.md](docs/security.md).
+
 ## Assets
 
 Everything is generated or self-hosted; nothing is fetched at runtime.

@@ -9,6 +9,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Least privilege. CI only reads the repository; nothing here writes to it, and
+# a compromised dependency running in a job with a write-scoped token could push.
+permissions:
+  contents: read
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -31,6 +36,15 @@ jobs:
 
       - name: Unit and integration tests
         run: npm run test -- --coverage
+
+      # Advisories in build tooling are noise for a game that ships no server of
+      # its own; advisories in code that reaches a device are not. Only the
+      # production tree is a build failure.
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=moderate
+
+      - name: Audit build tooling (advisory only)
+        run: npm audit || true
 
       # The gate that everything else rests on: the simulation must produce
       # identical results in a browser and in Node, or the leaderboard is fiction.

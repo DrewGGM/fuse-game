@@ -29,7 +29,9 @@
     "android:sync": "npm run build --workspace=@fuse/game && cd apps/game && npx cap sync android",
     "pars": "tsx --tsconfig tsconfig.json scripts/build-pars.ts",
     "show": "tsx --tsconfig tsconfig.json scripts/show-board.ts",
-    "verify:seeds": "tsx --tsconfig tsconfig.json scripts/verify-all-seeds.ts"
+    "verify:seeds": "tsx --tsconfig tsconfig.json scripts/verify-all-seeds.ts",
+    "audit": "npm audit --omit=dev --audit-level=moderate",
+    "csp:check": "node scripts/csp-check.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.39.5",

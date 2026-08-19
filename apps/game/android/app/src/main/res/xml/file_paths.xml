@@ -1,5 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  Scoped to one directory instead of the whole external-storage and cache roots.
+
+  The generated defaults were path="." on both, which grants any app holding a
+  shared URI read access across everything the app can see there. The only file
+  Fuse ever shares is an exported clip, so that is the only place exposed.
+-->
 <paths xmlns:android="http://schemas.android.com/apk/res/android">
-    <external-path name="my_images" path="." />
-    <cache-path name="my_cache_images" path="." />
+    <cache-path name="shared_clips" path="shared/" />
 </paths>
