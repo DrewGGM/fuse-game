@@ -255,13 +255,29 @@ Everything is generated or self-hosted; nothing is fetched at runtime.
 |---|---|---|
 | Chakra Petch | `@fontsource/chakra-petch`, subset to latin | SIL OFL 1.1 |
 | App icon, splash | Drawn by `scripts/make-icon.mjs` with the game's own palette | this project |
-| Sound | Synthesised at runtime with Web Audio; no audio files exist | — |
+| Eight sound cues | Kenney's *Interface Sounds*, *Digital Audio* and *Sci-Fi Sounds*, trimmed and levelled by `scripts/build-sfx.mjs` | CC0 1.0 |
+
+The board is still drawn entirely in code — a sprite sheet cannot follow a beam
+whose path changes every run, or recolour itself when the player switches
+palette. Sound is the one place a recorded asset beats a generated one: the
+oscillator tones these replaced were correct and thin, and no amount of
+synthesis at this scale was going to give them a body.
+
+CC0 asks for nothing, but Kenney is credited here and in the game's settings
+screen anyway.
 
 Regenerate the icon set after changing `scripts/make-icon.mjs`:
 
 ```bash
 node scripts/make-icon.mjs
 cd apps/game && npx @capacitor/assets generate --android --assetPath assets
+```
+
+Rebuild the sound cues after changing `scripts/build-sfx.mjs` — it fetches the
+packs itself and needs ffmpeg on the path:
+
+```bash
+node scripts/build-sfx.mjs
 ```
 
 That tool writes a full-bleed PNG splash at every density, which costs about

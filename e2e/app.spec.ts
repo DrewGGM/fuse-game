@@ -287,6 +287,107 @@ test.describe('settings', () => {
   });
 });
 
+/**
+ * Counts what the audio graph is actually asked to play.
+ *
+ * The unit tests prove the module picks a sample over a tone; only a real
+ * browser proves the files exist, are served, and decode. Installed before the
+ * app boots so nothing is missed, and it records instead of blocking — the game
+ * plays exactly as it would otherwise.
+ */
+async function watchAudio(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const log = { samples: [] as number[], tones: [] as number[] };
+    (window as any).__audio = log;
+
+    const source = AudioContext.prototype.createBufferSource;
+    AudioContext.prototype.createBufferSource = function (this: AudioContext) {
+      const node = source.call(this);
+      const start = node.start.bind(node);
+      node.start = ((...args: unknown[]) => {
+        log.samples.push(node.playbackRate.value);
+        return (start as (...a: unknown[]) => void)(...args);
+      }) as typeof node.start;
+      return node;
+    };
+
+    const osc = AudioContext.prototype.createOscillator;
+    AudioContext.prototype.createOscillator = function (this: AudioContext) {
+      const node = osc.call(this);
+      const start = node.start.bind(node);
+      node.start = ((...args: unknown[]) => {
+        log.tones.push(node.frequency.value);
+        return (start as (...a: unknown[]) => void)(...args);
+      }) as typeof node.start;
+      return node;
+    };
+  });
+  await page.reload();
+  await expect(page.locator('#screen-home')).toBeVisible();
+}
+
+test.describe('sound', () => {
+  test('serves every cue', async ({ page }) => {
+    const bad: string[] = [];
+    page.on('response', (r) => {
+      if (r.url().includes('/sfx/') && r.status() !== 200) bad.push(`${r.status()} ${r.url()}`);
+    });
+    await page.reload();
+    await page.waitForFunction(
+      () => performance.getEntriesByType('resource').filter((e) => e.name.includes('/sfx/')).length === 8,
+      null,
+      // Interval rather than the default requestAnimationFrame: a throttled page
+      // stops getting frames, and the wait then fails because nothing asked the
+      // question, not because the answer was no.
+      { timeout: 10_000, polling: 250 }
+    );
+    expect(bad).toEqual([]);
+  });
+
+  test('plays the samples, not the fallback tones, through a whole run', async ({ page }) => {
+    await watchAudio(page);
+    await page.locator('#btn-play').click();
+    await fillBoard(page);
+    await page.locator('#btn-launch').click();
+    await expect(page.locator('#screen-result')).toBeVisible({ timeout: 20_000 });
+
+    const log = await page.evaluate(() => (window as any).__audio as { samples: number[]; tones: number[] });
+    // The first cue of a session is a tone by construction: decoding needs the
+    // context, and the context needs the gesture that produced that first cue.
+    expect(log.tones.length).toBeLessThanOrEqual(1);
+    expect(log.samples.length).toBeGreaterThan(5);
+  });
+
+  test('bends the pitch upward as the combo climbs', async ({ page }) => {
+    await watchAudio(page);
+    await page.locator('#btn-play').click();
+    await fillBoard(page);
+    await page.locator('#btn-launch').click();
+    await expect(page.locator('#screen-result')).toBeVisible({ timeout: 20_000 });
+
+    const rates = await page.evaluate(() => (window as any).__audio.samples as number[]);
+    // A chain that played one note eighty times would be a rattle. The rising
+    // line is what makes it read as a single accelerating event.
+    expect(Math.max(...rates)).toBeGreaterThan(1);
+  });
+
+  test('turning sound off means silence, not a quieter sound', async ({ page }) => {
+    await page.locator('#btn-settings').click();
+    await page.locator('#set-sound').uncheck();
+    await page.locator('#btn-settings-back').click();
+
+    await watchAudio(page);
+    await page.locator('#btn-play').click();
+    await fillBoard(page);
+    await page.locator('#btn-launch').click();
+    await expect(page.locator('#screen-result')).toBeVisible({ timeout: 20_000 });
+
+    const log = await page.evaluate(() => (window as any).__audio as { samples: number[]; tones: number[] });
+    expect(log.samples).toEqual([]);
+    expect(log.tones).toEqual([]);
+  });
+});
+
 test.describe('monetisation rules', () => {
   test('never shows an ad before or during play', async ({ page }) => {
     await page.locator('#btn-play').click();

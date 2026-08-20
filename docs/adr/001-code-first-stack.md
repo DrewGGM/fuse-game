@@ -33,6 +33,13 @@ from a terminal.
 - Audio latency in a WebView is worse than native. Mitigated with short
   synthesised blips through Web Audio, preloaded, with no audio files at all.
 
+  *Revised 20 Aug 2026.* The latency argument held; the "no audio files" part
+  did not survive contact with how it sounded. Eight CC0 one-shots (37 kB,
+  precached, decoded once into AudioBuffers) replaced the oscillators and cost
+  nothing measurable at launch. The synthesised versions are still in
+  `sound.ts` as the fallback, so the property that actually mattered — a game
+  that cannot be silenced by a failed download — is unchanged.
+
 ### Risks
 - Google Play's spam and minimum-functionality policies target WebView wrappers.
   A self-contained offline game with native billing is not what those clauses
