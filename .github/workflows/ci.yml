@@ -167,17 +167,32 @@ jobs:
 
       # A deployed Worker that cannot reach its database returns 500 on the
       # first real request. Better to find that here than from a player.
+      # Deliberately a *rejected* submission, not a successful one.
+      #
+      # Before the Worker can decide a claimed score is wrong it verifies the
+      # token, validates the payload, checks the date, queries D1 for the attempt
+      # count, derives the board and re-runs the simulation. SCORE_MISMATCH is
+      # therefore a receipt for the whole path — and unlike a real run, it leaves
+      # nothing on the leaderboard players actually compete on. An earlier
+      # version submitted genuine runs and put invented names on the live board.
       - name: Smoke test the live API
         if: steps.creds.outputs.ready == 'true'
         run: |
           set -e
           url="${{ vars.FUSE_API_BASE || 'https://api-fuse-app.andrewgarcia.dev' }}"
-          echo "checking $url"
-          code=$(curl -s -o /tmp/body.json -w '%{http_code}' -X POST "$url/v1/players")
+          today=$(date -u +%F)
+
+          code=$(curl -s -o /tmp/player.json -w '%{http_code}' -X POST "$url/v1/players")
           echo "POST /v1/players -> $code"
           test "$code" = "201"
-          # A player row means the D1 binding and the token secret are both live.
-          grep -q '"token"' /tmp/body.json
-          code=$(curl -s -o /dev/null -w '%{http_code}' "$url/v1/daily/$(date -u +%F)")
-          echo "GET /v1/daily/today -> $code"
+          token=$(python3 -c "import json;print(json.load(open('/tmp/player.json'))['token'])")
+
+          code=$(curl -s -o /dev/null -w '%{http_code}' "$url/v1/daily/$today")
+          echo "GET /v1/daily/$today -> $code"
           test "$code" = "200"
+
+          code=$(curl -s -o /tmp/probe.json -w '%{http_code}' -X POST "$url/v1/runs"             -H 'content-type: application/json' -H "authorization: Bearer $token"             -d "{\"date\":\"$today\",\"placements\":[{\"x\":1,\"y\":1,\"piece\":1}],\"clientScore\":999999}")
+          echo "POST /v1/runs (deliberately wrong score) -> $code"
+          test "$code" = "422"
+          grep -q 'SCORE_MISMATCH' /tmp/probe.json
+          echo "the Worker replayed the run and refused it, as it should"
