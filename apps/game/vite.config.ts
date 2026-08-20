@@ -5,7 +5,7 @@ const r = (p: string) => fileURLToPath(new URL(p, import.meta.url));
 
 import pkg from './package.json' with { type: 'json' };
 
-const API_BASE = process.env.FUSE_API_BASE ?? 'https://fuse-api.workers.dev';
+const API_BASE = process.env.FUSE_API_BASE ?? 'https://api-fuse-app.andrewgarcia.dev';
 
 /**
  * Keeps the CSP's connect-src in step with the API the build actually targets.

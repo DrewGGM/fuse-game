@@ -117,7 +117,7 @@ jobs:
 
     environment:
       name: production
-      url: https://api.fuse.andrewgarcia.dev
+      url: https://api-fuse-app.andrewgarcia.dev
 
     steps:
       - uses: actions/checkout@v4
@@ -152,7 +152,9 @@ jobs:
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-        run: npx wrangler d1 migrations apply fuse-db --remote
+        # --config is required: wrangler searches upward and would otherwise
+          # miss this file entirely from the repository root.
+        run: npx wrangler d1 migrations apply fuse-db --remote --config ./wrangler.toml
 
       - name: Deploy the Worker
         if: steps.creds.outputs.ready == 'true'
@@ -161,7 +163,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
           workingDirectory: apps/api
-          command: deploy
+          command: deploy --config ./wrangler.toml
 
       # A deployed Worker that cannot reach its database returns 500 on the
       # first real request. Better to find that here than from a player.
@@ -169,7 +171,7 @@ jobs:
         if: steps.creds.outputs.ready == 'true'
         run: |
           set -e
-          url="${{ vars.FUSE_API_BASE || 'https://api.fuse.andrewgarcia.dev' }}"
+          url="${{ vars.FUSE_API_BASE || 'https://api-fuse-app.andrewgarcia.dev' }}"
           echo "checking $url"
           code=$(curl -s -o /tmp/body.json -w '%{http_code}' -X POST "$url/v1/players")
           echo "POST /v1/players -> $code"

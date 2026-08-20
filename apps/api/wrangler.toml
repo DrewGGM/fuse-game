@@ -10,15 +10,18 @@ enabled = true
 [[d1_databases]]
 binding = "DB"
 database_name = "fuse-db"
-# Filled in by `wrangler d1 create fuse-db`.
-database_id = "local-dev-placeholder"
+# Created 2026-08-20. Not a secret: it names the database, it does not grant
+# access — that comes from the account binding.
+database_id = "832de55e-9515-4c30-985f-2cb13b0e7b6e"
 migrations_dir = "migrations"
 
-# The site answers on a subdomain of the same zone as the web build, so both
-# halves of the product sit on one zone and there is one place to reason about
-# DNS. Cloudflare creates the record on deploy.
+# The Android app's own leaderboard, separate from the web one.
+#
+# Flat hostname rather than nesting under the site's subdomain, matching
+# api-fuse.andrewgarcia.dev. The two are deliberately different Workers with
+# different databases: same code, same scoring, separate communities.
 [[routes]]
-pattern = "api.fuse.andrewgarcia.dev"
+pattern = "api-fuse-app.andrewgarcia.dev"
 custom_domain = true
 
 # TOKEN_SECRET is deliberately NOT here.
